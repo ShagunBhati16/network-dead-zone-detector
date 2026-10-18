@@ -1,28 +1,31 @@
-
-import { useState } from "react";
-import {
-  Activity,
-  Wifi,
-  MapPin,
-  FileChartColumn,
-  Gauge,
-  Bell,
-  Search,
-  Play,
-  CheckCircle2,
-  Clock3,
-  RefreshCw,
-  AlertTriangle,
-  Menu,
-} from "lucide-react";
 import "./App.css";
+import { useMemo, useState } from "react";
+import {
+  Activity, Wifi, MapPin, FileChartColumn, Gauge, Bell, Search,
+  Play, CheckCircle2, Clock3, RefreshCw, AlertTriangle,
+  CalendarDays, Filter, MapPinned, Layers, X
+} from "lucide-react";
+import {
+  MapContainer, TileLayer, CircleMarker, Popup, ZoomControl, useMap
+} from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 
-const initialLocations = [
-  { name: "Main Library", area: "North Campus", latency: 24, loss: 0, quality: "Good" },
-  { name: "Computer Lab 3", area: "Academic Block", latency: 86, loss: 1.8, quality: "Moderate" },
-  { name: "Parking Area", area: "East Campus", latency: 192, loss: 8.4, quality: "Poor" },
-  { name: "College Canteen", area: "Central Campus", latency: 38, loss: 0.4, quality: "Good" },
+
+const demoLocations = [
+  { id: 1, name: "Main Library", area: "North Campus", lat: 18.4575, lng: 73.8203, latency: 24, loss: 0, quality: "Good", date: "2026-10-18", signal: -48, tests: 18 },
+  { id: 2, name: "Computer Lab 3", area: "Academic Block", lat: 18.4585, lng: 73.8218, latency: 86, loss: 1.8, quality: "Moderate", date: "2026-10-17", signal: -67, tests: 12 },
+  { id: 3, name: "Parking Area", area: "East Campus", lat: 18.4578, lng: 73.8240, latency: 192, loss: 8.4, quality: "Poor", date: "2026-10-18", signal: -83, tests: 9 },
+  { id: 4, name: "College Canteen", area: "Central Campus", lat: 18.4565, lng: 73.8220, latency: 38, loss: 0.4, quality: "Good", date: "2026-10-16", signal: -54, tests: 15 },
+  { id: 5, name: "Sports Ground", area: "South Campus", lat: 18.4549, lng: 73.8215, latency: 128, loss: 4.1, quality: "Moderate", date: "2026-10-15", signal: -74, tests: 7 },
+  { id: 6, name: "Hostel Entrance", area: "West Campus", lat: 18.4568, lng: 73.8189, latency: 31, loss: 0, quality: "Good", date: "2026-10-18", signal: -51, tests: 14 },
+  { id: 7, name: "Auditorium", area: "Academic Block", lat: 18.4594, lng: 73.8231, latency: 164, loss: 6.2, quality: "Poor", date: "2026-10-14", signal: -80, tests: 6 },
 ];
+
+const colors = {
+  Good: "#42dfa4",
+  Moderate: "#ffbd52",
+  Poor: "#ff6877",
+};
 
 const navigation = [
   { name: "Dashboard", icon: Activity },
@@ -31,39 +34,6 @@ const navigation = [
   { name: "Test History", icon: Clock3 },
   { name: "Reports", icon: FileChartColumn },
 ];
-
-function StatCard({ title, value, unit, icon: Icon, note, color }) {
-  return (
-    <section className="ops-panel">
-      <div className="ops-panel-title">
-        <span>{title}</span>
-        <Icon size={17} />
-      </div>
-      <div className="ops-big-value">
-        {value}
-        {unit && <span style={{ fontSize: 14, marginLeft: 5 }}>{unit}</span>}
-      </div>
-      <div className="ops-subtitle">{note}</div>
-      <div
-        style={{
-          height: 3,
-          marginTop: 16,
-          background: "#1b3550",
-          borderRadius: 5,
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${Math.max(8, Math.min(Number(value) || 8, 100))}%`,
-            background: color,
-            borderRadius: 5,
-          }}
-        />
-      </div>
-    </section>
-  );
-}
 
 function QualityBadge({ quality }) {
   return (
@@ -74,28 +44,312 @@ function QualityBadge({ quality }) {
   );
 }
 
+function MapRecenter({ location }) {
+  const map = useMap();
+
+  if (location) {
+    map.flyTo([location.lat, location.lng], 17, { duration: 0.5 });
+  }
+
+  return null;
+}
+
+function MapScreen({ locations }) {
+  const [query, setQuery] = useState("");
+  const [quality, setQuality] = useState("All");
+  const [date, setDate] = useState("all");
+  const [selectedId, setSelectedId] = useState(3);
+  const [showLegend, setShowLegend] = useState(true);
+
+  const dates = [...new Set(locations.map((item) => item.date))].sort().reverse();
+
+  const filtered = useMemo(() => {
+    return locations.filter((location) => {
+      const matchesSearch =
+        `${location.name} ${location.area}`
+          .toLowerCase()
+          .includes(query.toLowerCase());
+
+      const matchesQuality =
+        quality === "All" || location.quality === quality;
+
+      const matchesDate = date === "all" || location.date === date;
+
+      return matchesSearch && matchesQuality && matchesDate;
+    });
+  }, [locations, query, quality, date]);
+
+  const selected =
+    filtered.find((item) => item.id === selectedId) || filtered[0] || null;
+
+  function resetFilters() {
+    setQuery("");
+    setQuality("All");
+    setDate("all");
+  }
+
+  return (
+    <div className="map-screen">
+      <section className="ops-panel map-controls-panel">
+        <div className="map-controls-heading">
+          <div>
+            <div className="ops-panel-title">
+              <span>LOCATION EXPLORER</span>
+              <MapPinned size={17} />
+            </div>
+            <p className="ops-subtitle">
+              Search locations and filter observations by date or connection quality.
+            </p>
+          </div>
+          <span className="ops-mini-tag">DEMO DATA</span>
+        </div>
+
+        <div className="map-filter-grid">
+          <label className="map-search-field">
+            <Search size={16} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search area or location..."
+              aria-label="Search area or location"
+            />
+          </label>
+
+          <label className="map-select-field">
+            <Filter size={15} />
+            <select
+              value={quality}
+              onChange={(e) => setQuality(e.target.value)}
+              aria-label="Filter by connection quality"
+            >
+              <option value="All">All quality levels</option>
+              <option value="Good">Good</option>
+              <option value="Moderate">Moderate</option>
+              <option value="Poor">Poor</option>
+            </select>
+          </label>
+
+          <label className="map-select-field">
+            <CalendarDays size={15} />
+            <select
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              aria-label="Filter by date"
+            >
+              <option value="all">All dates</option>
+              {dates.map((day) => (
+                <option key={day} value={day}>{day}</option>
+              ))}
+            </select>
+          </label>
+
+          <button className="map-reset-button" onClick={resetFilters}>
+            <RefreshCw size={14} /> Reset
+          </button>
+        </div>
+
+        <div className="map-result-count">
+          Showing <strong>{filtered.length}</strong> of {locations.length} sample locations
+        </div>
+      </section>
+
+      <div className="map-workspace">
+        <section className="ops-panel interactive-map-panel">
+          <div className="ops-panel-title">
+            <span>CONNECTIVITY COVERAGE MAP</span>
+            <span className="ops-mini-tag">INTERACTIVE</span>
+          </div>
+
+          <div className="leaflet-map-wrap">
+            <MapContainer
+              center={[18.4573, 73.8217]}
+              zoom={16}
+              scrollWheelZoom
+              zoomControl={false}
+              className="leaflet-map"
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+
+              <ZoomControl position="topright" />
+
+              {selected && <MapRecenter location={selected} />}
+
+              {filtered.map((location) => (
+                <CircleMarker
+                  key={location.id}
+                  center={[location.lat, location.lng]}
+                  radius={selected?.id === location.id ? 11 : 8}
+                  pathOptions={{
+                    color: colors[location.quality],
+                    fillColor: colors[location.quality],
+                    fillOpacity: 0.85,
+                    weight: selected?.id === location.id ? 4 : 2,
+                  }}
+                  eventHandlers={{
+                    click: () => setSelectedId(location.id),
+                  }}
+                >
+                  <Popup>
+                    <div className="map-popup">
+                      <strong>{location.name}</strong>
+                      <span>{location.area}</span>
+                      <b style={{ color: colors[location.quality] }}>
+                        {location.quality} · {location.latency} ms
+                      </b>
+                      <button onClick={() => setSelectedId(location.id)}>
+                        View metrics
+                      </button>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
+            </MapContainer>
+
+            {showLegend ? (
+              <div className="leaflet-legend">
+                <div className="legend-head">
+                  CONNECTION QUALITY
+                  <button onClick={() => setShowLegend(false)} aria-label="Hide legend">
+                    <X size={12} />
+                  </button>
+                </div>
+                <span><i style={{ background: colors.Good }} /> Good</span>
+                <span><i style={{ background: colors.Moderate }} /> Moderate</span>
+                <span><i style={{ background: colors.Poor }} /> Poor</span>
+                <small>Illustrative sample records</small>
+              </div>
+            ) : (
+              <button className="show-legend-button" onClick={() => setShowLegend(true)}>
+                <Layers size={14} /> Legend
+              </button>
+            )}
+          </div>
+
+          <div className="map-caption">
+            <MapPin size={14} />
+            Sample campus coordinates — not live GPS or verified dead zones.
+          </div>
+        </section>
+
+        <aside className="ops-panel map-details-panel">
+          <div className="ops-panel-title">
+            <span>LOCATION DETAILS</span>
+            <Activity size={17} />
+          </div>
+
+          {selected ? (
+            <>
+              <div className="selected-location-head">
+                <span className="selected-location-icon"><MapPin size={19} /></span>
+                <div>
+                  <h2>{selected.name}</h2>
+                  <p>{selected.area}</p>
+                </div>
+              </div>
+
+              <QualityBadge quality={selected.quality} />
+
+              <div className="selected-map-metrics">
+                <div><span>HTTP latency*</span><strong>{selected.latency} <small>ms</small></strong></div>
+                <div><span>Packet loss*</span><strong>{selected.loss}<small>%</small></strong></div>
+                <div><span>Signal estimate*</span><strong>{selected.signal}<small> dBm</small></strong></div>
+                <div><span>Recorded tests*</span><strong>{selected.tests}</strong></div>
+              </div>
+
+              <div className="selected-detail-row">
+                <span>Observation date</span><strong>{selected.date}</strong>
+              </div>
+              <div className="selected-detail-row">
+                <span>Coordinates</span>
+                <strong>{selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}</strong>
+              </div>
+
+              <div className="demo-warning">
+                <AlertTriangle size={15} />
+                <span>Demo record only. These values are not measured device data.</span>
+              </div>
+
+              <p className="map-metric-foot">
+                *Illustrative metrics. Real latency, packet loss, and signal strength are not collected by this map yet.
+              </p>
+            </>
+          ) : (
+            <div className="ops-empty">
+              <MapPin size={22} />
+              <span>No matching locations</span>
+              <small>Change the search or filters to see markers.</small>
+            </div>
+          )}
+        </aside>
+      </div>
+
+      <section className="ops-panel map-location-list">
+        <div className="ops-panel-title">
+          <span>OBSERVATIONS IN VIEW</span>
+          <span className="ops-mini-tag">{filtered.length} LOCATIONS</span>
+        </div>
+
+        {filtered.length ? (
+          <div className="map-location-table">
+            <div className="map-table-head">
+              <span>LOCATION</span><span>AREA</span><span>LATENCY*</span>
+              <span>QUALITY</span><span>DATE</span>
+            </div>
+
+            {filtered.map((location) => (
+              <button
+                key={location.id}
+                className={`map-table-row ${selected?.id === location.id ? "selected" : ""}`}
+                onClick={() => setSelectedId(location.id)}
+              >
+                <span className="map-table-name">
+                  <i style={{ background: colors[location.quality] }} />
+                  {location.name}
+                </span>
+                <span>{location.area}</span>
+                <strong>{location.latency} ms</strong>
+                <QualityBadge quality={location.quality} />
+                <span>{location.date}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="ops-empty">
+            <Search size={22} />
+            <span>No matching locations</span>
+            <small>Try another search term or reset the filters.</small>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState("Dashboard");
-  const [locations, setLocations] = useState(initialLocations);
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [testHistory, setTestHistory] = useState([]);
 
   async function runNetworkTest() {
     setTesting(true);
     setError("");
     setResult(null);
 
-    try {
-      const start = performance.now();
+    const start = performance.now();
 
+    try {
       const response = await fetch("http://localhost:5000/api/health", {
         method: "GET",
         cache: "no-store",
       });
 
-      const elapsed = Math.round(performance.now() - start);
+      const latency = Math.round(performance.now() - start);
 
       if (!response.ok) {
         throw new Error(`Backend returned HTTP ${response.status}`);
@@ -103,24 +357,26 @@ export default function App() {
 
       const data = await response.json();
 
-      setResult({
-        latency: elapsed,
-        message: data.message || "Backend responded successfully.",
-      });
-    } catch (err) {
+      const record = {
+        id: Date.now(),
+        time: new Date().toLocaleString(),
+        latency,
+        status: "Success",
+        message: data.message,
+      };
+
+      setResult(record);
+      setTestHistory((current) => [record, ...current]);
+    } catch {
       setError(
-        "Could not reach the backend. Make sure your backend server is running at localhost:5000."
+        "Could not reach the backend. Make sure it is running at localhost:5000."
       );
     } finally {
       setTesting(false);
     }
   }
 
-  function refreshDemoLocations() {
-    setLocations((current) => [...current]);
-  }
-
-  const filteredLocations = locations.filter((location) =>
+  const filteredLocations = demoLocations.filter((location) =>
     `${location.name} ${location.area} ${location.quality}`
       .toLowerCase()
       .includes(search.toLowerCase())
@@ -130,13 +386,8 @@ export default function App() {
     <div className="ops-app">
       <aside className="ops-sidebar">
         <div className="ops-brand">
-          <div className="ops-brand-icon">
-            <Wifi size={24} />
-          </div>
-          <div>
-            <strong>NetSpot</strong>
-            <span>NETWORK INTELLIGENCE</span>
-          </div>
+          <div className="ops-brand-icon"><Wifi size={24} /></div>
+          <div><strong>NetSpot</strong><span>NETWORK INTELLIGENCE</span></div>
         </div>
 
         <div className="ops-nav-label">WORKSPACE</div>
@@ -150,19 +401,13 @@ export default function App() {
             >
               <Icon size={17} />
               <span>{name}</span>
-              {name === "Dead Zone Map" && (
-                <span className="ops-nav-count">12</span>
-              )}
+              {name === "Dead Zone Map" && <span className="ops-nav-count">{demoLocations.length}</span>}
             </button>
           ))}
         </nav>
 
         <div className="ops-sidebar-bottom">
-          <div className="ops-online">
-            <span />
-            <span>System online</span>
-            <strong>Connected</strong>
-          </div>
+          <div className="ops-online"><span /><span>Backend</span><strong>Local API</strong></div>
           <div className="ops-version">NETSPOT v1.0.0</div>
         </div>
       </aside>
@@ -170,24 +415,19 @@ export default function App() {
       <main className="ops-main">
         <header className="ops-topbar">
           <div className="ops-page-title">
-            <span>Workspace</span>
-            <b>/</b>
-            <strong>{activePage}</strong>
+            <span>Workspace</span><b>/</b><strong>{activePage}</strong>
           </div>
-
           <div className="ops-top-actions">
             <label className="search-box">
               <Search size={15} />
               <input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search locations..."
                 aria-label="Search locations"
               />
             </label>
-            <button className="ops-top-icon" aria-label="Notifications">
-              <Bell size={17} />
-            </button>
+            <button className="ops-top-icon" aria-label="Notifications"><Bell size={17} /></button>
             <div className="ops-user-avatar">NS</div>
           </div>
         </header>
@@ -196,27 +436,11 @@ export default function App() {
           <div className="ops-heading-row">
             <div>
               <div className="ops-overline">NETWORK OPERATIONS CENTER</div>
-              <h1>
-                {activePage === "Dashboard"
-                  ? "Network Intelligence Dashboard"
-                  : activePage}
-              </h1>
-              <p>
-                Monitor connectivity, identify weak signal areas, and review
-                network performance.
-              </p>
+              <h1>{activePage === "Dashboard" ? "Network Intelligence Dashboard" : activePage}</h1>
+              <p>Monitor connectivity, identify weak signal areas, and review network performance.</p>
             </div>
-
-            <button
-              className="ops-run-button"
-              onClick={runNetworkTest}
-              disabled={testing}
-            >
-              {testing ? (
-                <RefreshCw size={16} className="spin" />
-              ) : (
-                <Play size={16} />
-              )}
+            <button className="ops-run-button" onClick={runNetworkTest} disabled={testing}>
+              {testing ? <RefreshCw size={16} className="spin" /> : <Play size={16} />}
               {testing ? "TESTING..." : "RUN NETWORK TEST"}
             </button>
           </div>
@@ -227,411 +451,141 @@ export default function App() {
               <div>
                 <strong>Backend connectivity test completed</strong>
                 <span>
-                  Browser-to-backend response time: {result.latency} ms.
-                  {` ${result.message} `}
-                  This measures response time to your backend, not your
-                  general internet speed or cellular signal strength.
+                  Browser-to-backend HTTP response time: {result.latency} ms.
+                  This is not general internet speed or cellular signal strength.
                 </span>
               </div>
-              <button onClick={() => setResult(null)} aria-label="Dismiss">
-                ×
-              </button>
+              <button onClick={() => setResult(null)} aria-label="Dismiss">×</button>
             </div>
           )}
 
-          {error && (
-            <div className="ops-error">
-              <AlertTriangle size={18} />
-              <span>{error}</span>
-            </div>
-          )}
+          {error && <div className="ops-error"><AlertTriangle size={18} /><span>{error}</span></div>}
+
+          {activePage === "Dead Zone Map" && <MapScreen locations={demoLocations} />}
 
           {activePage === "Dashboard" && (
             <>
               <div className="ops-dashboard-grid">
                 <section className="ops-panel status-panel">
-                  <div className="ops-panel-title">
-                    <span>SYSTEM STATUS</span>
-                    <Activity size={17} />
-                  </div>
-                  <div className="system-health">
-                    <span className="health-light" />
-                    <div>
-                      <span className="health-caption">DEMO DASHBOARD STATUS</span>
-                      <strong>Monitoring Ready</strong>
-                    </div>
-                  </div>
-                  <div className="health-score-row">
-                    <strong>4</strong>
-                    <span>Sample locations displayed</span>
-                  </div>
+                  <div className="ops-panel-title"><span>SYSTEM STATUS</span><Activity size={17} /></div>
+                  <div className="system-health"><span className="health-light" /><div><span className="health-caption">DEMO DASHBOARD STATUS</span><strong>Monitoring Ready</strong></div></div>
+                  <div className="health-score-row"><strong>{demoLocations.length}</strong><span>Sample locations displayed</span></div>
                   <div className="ops-divider" />
-                  <div className="status-stat-row">
-                    <span><i className="cyan-dot" /> Good</span>
-                    <strong>2 locations</strong>
-                  </div>
-                  <div className="status-stat-row">
-                    <span><i className="amber-dot" /> Moderate</span>
-                    <strong>1 location</strong>
-                  </div>
-                  <div className="status-stat-row">
-                    <span><i className="red-dot" /> Poor</span>
-                    <strong>1 location</strong>
-                  </div>
+                  {["Good", "Moderate", "Poor"].map((quality) => (
+                    <div className="status-stat-row" key={quality}>
+                      <span><i className={quality === "Good" ? "cyan-dot" : quality === "Moderate" ? "amber-dot" : "red-dot"} />{quality}</span>
+                      <strong>{demoLocations.filter((item) => item.quality === quality).length} locations</strong>
+                    </div>
+                  ))}
                 </section>
 
                 <section className="ops-panel world-panel">
-                  <div className="ops-panel-title">
-                    <span>MONITORED CAMPUS AREAS</span>
-                    <span className="ops-mini-tag">ILLUSTRATIVE VIEW</span>
+                  <div className="ops-panel-title"><span>MONITORED CAMPUS AREAS</span><span className="ops-mini-tag">DEMO MAP</span></div>
+                  <div className="dashboard-map-preview">
+                    <MapContainer center={[18.4573, 73.8217]} zoom={15} scrollWheelZoom={false} zoomControl={false}>
+                      <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                      {demoLocations.map((location) => (
+                        <CircleMarker key={location.id} center={[location.lat, location.lng]} radius={7} pathOptions={{ color: colors[location.quality], fillColor: colors[location.quality], fillOpacity: 0.85 }}>
+                          <Popup>{location.name} · {location.quality} (demo)</Popup>
+                        </CircleMarker>
+                      ))}
+                    </MapContainer>
                   </div>
-
-                  <div className="world-map">
-                    <svg
-                      className="world-svg"
-                      viewBox="0 0 600 330"
-                      role="img"
-                      aria-label="Illustrative network monitoring map"
-                    >
-                      <defs>
-                        <pattern
-                          id="grid"
-                          width="30"
-                          height="30"
-                          patternUnits="userSpaceOnUse"
-                        >
-                          <path
-                            d="M 30 0 L 0 0 0 30"
-                            fill="none"
-                            stroke="#1c3853"
-                            strokeWidth="0.7"
-                          />
-                        </pattern>
-                      </defs>
-                      <rect width="600" height="330" fill="url(#grid)" />
-                      <path
-                        d="M60 75 L120 45 L180 63 L205 102 L170 128 L138 113 L115 150 L75 125 Z
-                           M240 75 L285 52 L335 65 L365 100 L342 135 L300 124 L278 150 L248 120 Z
-                           M395 80 L455 60 L520 90 L535 130 L495 150 L455 132 L420 145 L390 115 Z
-                           M180 190 L220 170 L250 205 L230 260 L205 282 L188 238 Z
-                           M405 190 L455 180 L485 215 L455 250 L425 238 Z"
-                        fill="#15314d"
-                        stroke="#254765"
-                        strokeWidth="1.2"
-                      />
-                      <path
-                        d="M100 100 L180 110 L290 90 L445 120 M180 110 L215 225 L445 120 L445 215"
-                        fill="none"
-                        stroke="#31cfe0"
-                        strokeWidth="1.4"
-                        strokeDasharray="5 6"
-                        opacity="0.65"
-                      />
-                    </svg>
-
-                    {[
-                      { x: 19, y: 28, quality: "good" },
-                      { x: 30, y: 35, quality: "good" },
-                      { x: 45, y: 27, quality: "moderate" },
-                      { x: 58, y: 41, quality: "poor" },
-                      { x: 74, y: 30, quality: "good" },
-                      { x: 84, y: 48, quality: "poor" },
-                      { x: 36, y: 67, quality: "good" },
-                      { x: 68, y: 72, quality: "moderate" },
-                      { x: 52, y: 55, quality: "good" },
-                    ].map((point, index) => (
-                      <div
-                        key={index}
-                        className={`world-marker ${point.quality}`}
-                        style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                      >
-                        <span />
-                      </div>
-                    ))}
-
-                    <div className="map-tooltip">
-                      <span className="tooltip-dot" />
-                      <div>
-                        <strong>Campus monitoring view</strong>
-                        <small>Sample markers — not live GPS data</small>
-                      </div>
-                    </div>
-
-                    <div className="world-legend">
-                      <span><i className="green-dot" /> Good</span>
-                      <span><i className="amber-dot" /> Moderate</span>
-                      <span><i className="red-dot" /> Poor</span>
-                    </div>
-                  </div>
+                  <button className="map-open-button" onClick={() => setActivePage("Dead Zone Map")}>Open Dead Zone Map <MapPin size={14} /></button>
                 </section>
 
                 <section className="ops-panel alerts-panel">
-                  <div className="ops-panel-title">
-                    <span>CONNECTIVITY INSIGHTS</span>
-                    <Bell size={16} />
-                  </div>
+                  <div className="ops-panel-title"><span>CONNECTIVITY INSIGHTS</span><Bell size={16} /></div>
                   <div className="ops-alert-list">
-                    <div className="ops-alert critical">
-                      <AlertTriangle size={16} className="alert-symbol" />
-                      <div>
-                        <strong>Weak connectivity detected</strong>
-                        <small>Parking Area · Sample data</small>
-                      </div>
-                    </div>
-                    <div className="ops-alert warning">
-                      <Activity size={16} className="alert-symbol" />
-                      <div>
-                        <strong>Elevated latency</strong>
-                        <small>Computer Lab 3 · Sample data</small>
-                      </div>
-                    </div>
-                    <div className="ops-alert info">
-                      <CheckCircle2 size={16} className="alert-symbol" />
-                      <div>
-                        <strong>Backend endpoint configured</strong>
-                        <small>Run a test to verify the connection</small>
-                      </div>
-                    </div>
+                    <div className="ops-alert critical"><AlertTriangle size={16} /><div><strong>Weak connectivity sample</strong><small>Parking Area · Demo data</small></div></div>
+                    <div className="ops-alert warning"><Activity size={16} /><div><strong>Elevated latency sample</strong><small>Computer Lab 3 · Demo data</small></div></div>
+                    <div className="ops-alert info"><CheckCircle2 size={16} /><div><strong>Backend endpoint configured</strong><small>Run a test to verify connection</small></div></div>
                   </div>
-                  <div className="ops-panel-foot">
-                    Insights are illustrative until real measurements are saved.
-                  </div>
+                  <div className="ops-panel-foot">Insights are illustrative until real measurements are saved.</div>
                 </section>
 
-                <StatCard
-                  title="SAMPLE TEST LOCATIONS"
-                  value="04"
-                  icon={MapPin}
-                  note="Example entries for the interface"
-                  color="#37d7e7"
-                />
-
-                <section className="ops-panel uptime-panel">
-                  <div className="ops-panel-title">
-                    <span>TEST ENGINE</span>
-                    <Gauge size={17} />
-                  </div>
-                  <div className="ops-big-value">
-                    {result ? `${result.latency} ms` : "Ready"}
-                  </div>
-                  <div className="ops-subtitle">
-                    {result
-                      ? "Latest backend response time"
-                      : "Run a test to measure backend response time"}
-                  </div>
-                  <button
-                    className="ops-run-button"
-                    style={{ width: "100%", marginTop: 16 }}
-                    onClick={runNetworkTest}
-                    disabled={testing}
-                  >
-                    <Play size={14} />
-                    {testing ? "TESTING..." : "TEST CONNECTION"}
-                  </button>
+                <section className="ops-panel">
+                  <div className="ops-panel-title"><span>SAMPLE LOCATIONS</span><MapPin size={17} /></div>
+                  <div className="ops-big-value">{demoLocations.length}</div>
+                  <div className="ops-subtitle">Example entries for the interface</div>
                 </section>
 
-                <section className="ops-panel signal-panel">
-                  <div className="ops-panel-title">
-                    <span>LATENCY OVERVIEW</span>
-                    <Activity size={17} />
-                  </div>
-                  <div className="ops-big-value">
-                    {result ? `${result.latency} ms` : "—"}
-                  </div>
-                  <div className="ops-subtitle">
-                    {result
-                      ? "Latest measured backend round-trip"
-                      : "No test result yet"}
-                  </div>
-                  <svg className="chart-svg" viewBox="0 0 300 100">
-                    {[20, 45, 70].map((y) => (
-                      <line
-                        key={y}
-                        x1="0"
-                        x2="300"
-                        y1={y}
-                        y2={y}
-                        stroke="#1e3b56"
-                        strokeWidth="1"
-                      />
-                    ))}
-                    <path
-                      d="M0 65 Q25 45 50 58 T100 49 T150 37 T200 48 T250 30 T300 39"
-                      fill="none"
-                      stroke="#39d9e9"
-                      strokeWidth="2.5"
-                    />
-                  </svg>
-                  <div className="ops-chart-axis">
-                    <span>Earlier</span>
-                    <span>Latest</span>
-                  </div>
+                <section className="ops-panel">
+                  <div className="ops-panel-title"><span>TEST ENGINE</span><Gauge size={17} /></div>
+                  <div className="ops-big-value">{result ? `${result.latency} ms` : "Ready"}</div>
+                  <div className="ops-subtitle">Browser-to-backend response time</div>
+                  <button className="ops-run-button full-button" onClick={runNetworkTest} disabled={testing}><Play size={14} />{testing ? "TESTING..." : "TEST CONNECTION"}</button>
                 </section>
 
-                <section className="ops-panel topology-panel">
-                  <div className="ops-panel-title">
-                    <span>NETWORK TOPOLOGY CONCEPT</span>
-                    <Activity size={17} />
-                  </div>
-                  <svg
-                    className="topology-svg"
-                    viewBox="0 0 420 230"
-                    role="img"
-                    aria-label="Illustrative network topology"
-                  >
-                    <g fill="none" strokeWidth="2">
-                      <path d="M65 70 L205 42 L345 78 L305 172 L160 185 L65 70" stroke="#39dba4" />
-                      <path d="M65 70 L160 185 L205 42 L305 172 L345 78" stroke="#e9b454" />
-                      <path d="M205 42 L220 115 L345 78 M220 115 L160 185" stroke="#39d9e9" />
-                    </g>
-                    {[
-                      { x: 65, y: 70, label: "Node A" },
-                      { x: 205, y: 42, label: "Gateway" },
-                      { x: 345, y: 78, label: "Node B" },
-                      { x: 305, y: 172, label: "Node C" },
-                      { x: 160, y: 185, label: "Node D" },
-                      { x: 220, y: 115, label: "Core" },
-                    ].map((node) => (
-                      <g key={node.label}>
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r="13"
-                          className="topology-node-halo"
-                        />
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r="8"
-                          className="topology-node"
-                        />
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r="2"
-                          className="topology-node-center"
-                        />
-                        <text
-                          x={node.x}
-                          y={node.y + 25}
-                          textAnchor="middle"
-                          className="topology-label"
-                        >
-                          {node.label}
-                        </text>
-                      </g>
-                    ))}
-                  </svg>
-                  <div className="ops-subtitle">
-                    Illustrative links only; actual topology discovery is not
-                    implemented yet.
-                  </div>
+                <section className="ops-panel">
+                  <div className="ops-panel-title"><span>LAST TEST LATENCY</span><Activity size={17} /></div>
+                  <div className="ops-big-value">{result ? `${result.latency} ms` : "—"}</div>
+                  <div className="ops-subtitle">{result ? "Latest HTTP response" : "No test result yet"}</div>
+                  <div className="latency-bars">{[35, 52, 42, 72, 48, 64, result ? Math.min(result.latency, 100) : 30].map((height, index) => <span key={index} style={{ height: `${height}%` }} />)}</div>
                 </section>
 
                 <section className="ops-panel locations-panel">
-                  <div className="ops-panel-title">
-                    <span>LOCATION CONNECTIVITY</span>
-                    <button
-                      className="ops-top-icon"
-                      onClick={refreshDemoLocations}
-                      aria-label="Refresh sample locations"
-                    >
-                      <RefreshCw size={14} />
-                    </button>
-                  </div>
+                  <div className="ops-panel-title"><span>LOCATION CONNECTIVITY</span><MapPin size={17} /></div>
                   {filteredLocations.map((location) => (
-                    <div className="ops-location-row" key={location.name}>
-                      <span
-                        className={`location-quality-dot ${location.quality.toLowerCase()}`}
-                      />
-                      <div>
-                        <strong>{location.name}</strong>
-                        <small>{location.area}</small>
-                      </div>
-                      <b>{location.latency} ms</b>
-                      <QualityBadge quality={location.quality} />
+                    <div className="ops-location-row" key={location.id}>
+                      <span className={`location-quality-dot ${location.quality.toLowerCase()}`} />
+                      <div><strong>{location.name}</strong><small>{location.area}</small></div>
+                      <b>{location.latency} ms</b><QualityBadge quality={location.quality} />
                     </div>
                   ))}
-                  {filteredLocations.length === 0 && (
-                    <div className="ops-empty">
-                      <Search size={20} />
-                      <span>No matching locations</span>
-                    </div>
-                  )}
-                  <div className="ops-panel-foot">
-                    Example values only; replace with measured results in a later step.
-                  </div>
+                  {!filteredLocations.length && <div className="ops-empty">No matching locations</div>}
+                  <div className="ops-panel-foot">Example values only; not live measurements.</div>
                 </section>
 
                 <section className="ops-panel locations-panel">
-                  <div className="ops-panel-title">
-                    <span>RECENT TEST HISTORY</span>
-                    <Clock3 size={17} />
-                  </div>
-                  {result ? (
-                    <div className="ops-history-row">
+                  <div className="ops-panel-title"><span>RECENT TEST HISTORY</span><Clock3 size={17} /></div>
+                  {testHistory.length ? testHistory.slice(0, 4).map((test) => (
+                    <div className="ops-history-row" key={test.id}>
                       <span className="history-state good" />
-                      <div>
-                        <strong>Backend connectivity test</strong>
-                        <small>{new Date().toLocaleTimeString()}</small>
-                      </div>
-                      <span className="history-speed">{result.latency} ms</span>
+                      <div><strong>Backend connectivity test</strong><small>{test.time}</small></div>
+                      <span className="history-speed">{test.latency} ms</span>
                     </div>
-                  ) : (
-                    <div className="ops-empty">
-                      <Clock3 size={22} />
-                      <span>No live test history yet</span>
-                      <small>Run a connection test to add a result.</small>
-                    </div>
-                  )}
+                  )) : <div className="ops-empty"><Clock3 size={22} /><span>No test run in this session</span><small>History is not persistent yet.</small></div>}
                 </section>
               </div>
-
-              <footer className="ops-footer">
-                <span>NETSPOT · NETWORK DEAD ZONE DETECTOR</span>
-                <span><i className="green-dot" /> Frontend running · Demo data shown</span>
-              </footer>
+              <footer className="ops-footer"><span>NETSPOT · NETWORK DEAD ZONE DETECTOR</span><span>Demo location data · Local backend test</span></footer>
             </>
           )}
 
-          {activePage !== "Dashboard" && (
-            <section className="ops-panel" style={{ marginTop: 20 }}>
-              <div className="ops-panel-title">
-                <span>{activePage.toUpperCase()}</span>
-                <Menu size={17} />
+          {activePage === "Network Test" && (
+            <section className="ops-panel screen-placeholder">
+              <div className="ops-panel-title"><span>NETWORK TEST</span><Gauge size={17} /></div>
+              <h2>Backend connectivity check</h2>
+              <p className="ops-subtitle">Measures HTTP response time to the local NetSpot backend, not general internet speed or cellular signal.</p>
+              <button className="ops-run-button" onClick={runNetworkTest} disabled={testing}><Play size={15} />{testing ? "TESTING..." : "RUN CONNECTION TEST"}</button>
+              {result && <p className="screen-result">Last result: {result.latency} ms · {result.time}</p>}
+            </section>
+          )}
+
+          {activePage === "Test History" && (
+            <section className="ops-panel screen-placeholder">
+              <div className="ops-panel-title"><span>TEST HISTORY</span><Clock3 size={17} /></div>
+              <p className="ops-subtitle">History is currently held in memory for this browser session. Database persistence is a future step.</p>
+              {testHistory.length ? testHistory.map((test) => (
+                <div className="ops-history-row" key={test.id}>
+                  <span className="history-state good" />
+                  <div><strong>Backend connectivity test</strong><small>{test.time}</small></div>
+                  <span className="history-speed">{test.latency} ms</span>
+                </div>
+              )) : <div className="ops-empty"><Clock3 size={22} /><span>No tests recorded in this session</span></div>}
+            </section>
+          )}
+
+          {activePage === "Reports" && (
+            <section className="ops-panel screen-placeholder">
+              <div className="ops-panel-title"><span>REPORTS</span><FileChartColumn size={17} /></div>
+              <h2>Reports are not generated yet</h2>
+              <p className="ops-subtitle">When test records are stored, this page can summarize latency and failed requests. It does not generate reports from sample map data.</p>
+              <div className="report-preview">
+                <span>Tests this session</span><strong>{testHistory.length}</strong>
+                <span>Average backend response time</span>
+                <strong>{testHistory.length ? `${Math.round(testHistory.reduce((sum, test) => sum + test.latency, 0) / testHistory.length)} ms` : "—"}</strong>
               </div>
-              {activePage === "Network Test" ? (
-                <>
-                  <p className="ops-subtitle">
-                    Test the browser's response time to the NetSpot backend.
-                    This does not measure cellular signal strength or general
-                    internet bandwidth.
-                  </p>
-                  <button
-                    className="ops-run-button"
-                    onClick={runNetworkTest}
-                    disabled={testing}
-                  >
-                    <Play size={15} />
-                    {testing ? "TESTING..." : "RUN CONNECTION TEST"}
-                  </button>
-                </>
-              ) : activePage === "Dead Zone Map" ? (
-                <p className="ops-subtitle">
-                  The map is currently illustrative. GPS location capture and
-                  real mapped test results will be added in a later step.
-                </p>
-              ) : activePage === "Test History" ? (
-                <p className="ops-subtitle">
-                  Completed tests will appear here. Persistent database-backed
-                  history has not been added yet.
-                </p>
-              ) : (
-                <p className="ops-subtitle">
-                  Report generation will be added after test results can be
-                  collected and saved.
-                </p>
-              )}
             </section>
           )}
         </div>
