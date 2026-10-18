@@ -1,0 +1,12 @@
+[
+  {
+    "id": "1792345236667-f1lt1e",
+    "createdAt": "2026-10-18T17:40:36.667Z",
+    "label": "Browser-to-backend connectivity test",
+    "latency": 43.3,
+    "downloadMbps": 1042.06,
+    "packetLoss": 0,
+    "status": "Success",
+    "note": "HTTP round-trip to the local API; throughput is a small-payload estimate."
+  }
+]
