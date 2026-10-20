@@ -10,7 +10,8 @@
     "signal": -48,
     "quality": "Good",
     "date": "2026-10-18",
-    "tests": 18
+    "tests": 18,
+    "userId": "5b65c426-a48d-421d-818e-25cb1ae1c196"
   },
   {
     "id": "2",
@@ -23,7 +24,8 @@
     "signal": -67,
     "quality": "Moderate",
     "date": "2026-10-17",
-    "tests": 12
+    "tests": 12,
+    "userId": "5b65c426-a48d-421d-818e-25cb1ae1c196"
   },
   {
     "id": "3",
@@ -36,7 +38,8 @@
     "signal": -83,
     "quality": "Poor",
     "date": "2026-10-18",
-    "tests": 9
+    "tests": 9,
+    "userId": "5b65c426-a48d-421d-818e-25cb1ae1c196"
   },
   {
     "id": "4",
@@ -49,7 +52,8 @@
     "signal": -54,
     "quality": "Good",
     "date": "2026-10-16",
-    "tests": 15
+    "tests": 15,
+    "userId": "5b65c426-a48d-421d-818e-25cb1ae1c196"
   },
   {
     "id": "5",
@@ -62,7 +66,8 @@
     "signal": -74,
     "quality": "Moderate",
     "date": "2026-10-15",
-    "tests": 7
+    "tests": 7,
+    "userId": "5b65c426-a48d-421d-818e-25cb1ae1c196"
   },
   {
     "id": "6",
@@ -75,7 +80,8 @@
     "signal": -51,
     "quality": "Good",
     "date": "2026-10-18",
-    "tests": 14
+    "tests": 14,
+    "userId": "5b65c426-a48d-421d-818e-25cb1ae1c196"
   },
   {
     "id": "7",
@@ -88,6 +94,7 @@
     "signal": -80,
     "quality": "Poor",
     "date": "2026-10-14",
-    "tests": 6
+    "tests": 6,
+    "userId": "5b65c426-a48d-421d-818e-25cb1ae1c196"
   }
 ]

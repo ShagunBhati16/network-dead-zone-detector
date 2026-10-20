@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Wifi, MapPinned, Gauge, Bell, Search, Play, CheckCircle2, Clock3,
   RefreshCw, AlertTriangle, CalendarDays, Filter, X, Download, ChevronDown,
   Settings, LogOut, Signal, Router, ArrowDownToLine, ArrowUpFromLine,
-  CircleHelp, Menu, Zap, ShieldCheck, MapPin, RadioTower, FileChartColumn,
-  Trash2, ExternalLink, Sun, Moon, LogIn
+  CircleHelp, Menu, Zap, ShieldCheck, MapPin, RadioTower, FileChartColumn, Smartphone, GitCompare, ActivitySquare,
+  Trash2, ExternalLink, Sun, Moon, LogIn, ImageUp, Layers, Crosshair
 } from 'lucide-react';
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer,
@@ -15,56 +15,77 @@ import 'leaflet/dist/leaflet.css';
 import './App.css';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const seedLocations = [
-  { id: 1, name: 'Main Library', area: 'North Campus', lat: 18.4575, lng: 73.8203, latency: 24, loss: 0, quality: 'Good', date: '2026-10-18', signal: -48, tests: 18 },
-  { id: 2, name: 'Computer Lab 3', area: 'Academic Block', lat: 18.4585, lng: 73.8218, latency: 86, loss: 1.8, quality: 'Moderate', date: '2026-10-17', signal: -67, tests: 12 },
-  { id: 3, name: 'Parking Area', area: 'East Campus', lat: 18.4578, lng: 73.8240, latency: 192, loss: 8.4, quality: 'Poor', date: '2026-10-18', signal: -83, tests: 9 },
-  { id: 4, name: 'College Canteen', area: 'Central Campus', lat: 18.4565, lng: 73.8220, latency: 38, loss: 0.4, quality: 'Good', date: '2026-10-16', signal: -54, tests: 15 },
-  { id: 5, name: 'Sports Ground', area: 'South Campus', lat: 18.4549, lng: 73.8215, latency: 128, loss: 4.1, quality: 'Moderate', date: '2026-10-15', signal: -74, tests: 7 },
-  { id: 6, name: 'Hostel Entrance', area: 'West Campus', lat: 18.4568, lng: 73.8189, latency: 31, loss: 0, quality: 'Good', date: '2026-10-18', signal: -51, tests: 14 },
-  { id: 7, name: 'Auditorium', area: 'Academic Block', lat: 18.4594, lng: 73.8231, latency: 164, loss: 6.2, quality: 'Poor', date: '2026-10-14', signal: -80, tests: 6 },
-];
+async function apiFetch(url, options = {}) { const headers = new Headers(options.headers || {}); const token = localStorage.getItem('netspot-auth-token'); if (token) headers.set('Authorization', `Bearer ${token}`); return fetch(url, { ...options, headers, cache: options.cache || 'no-store' }); }
+async function downloadApi(path) { const response = await apiFetch(`${API}${path}`); if (!response.ok) { const body = await response.json().catch(()=>({})); throw new Error(body.message || `Download failed (${response.status})`); } const blob = await response.blob(); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = (response.headers.get('Content-Disposition') || '').match(/filename="?([^";]+)"?/i)?.[1] || 'netspot-report'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
 const qualityColor = { Good: '#2ed6a1', Moderate: '#ffbd4a', Poor: '#ff5d73' };
 const nav = [
   { label: 'Dashboard', icon: Activity }, { label: 'Network Test', icon: Gauge },
-  { label: 'Dead Zone Map', icon: MapPinned }, { label: 'Test History', icon: Clock3 },
+  { label: 'Walk-test Survey', icon: RadioTower }, { label: 'Dead Zone Map', icon: MapPinned }, { label: 'Test History', icon: Clock3 },
   { label: 'Reports', icon: FileChartColumn },
-];
-const trendSeed = [
-  { time: '08:00', latency: 42, download: 86 }, { time: '09:00', latency: 38, download: 92 },
-  { time: '10:00', latency: 51, download: 89 }, { time: '11:00', latency: 35, download: 105 },
-  { time: '12:00', latency: 47, download: 98 }, { time: '13:00', latency: 31, download: 112 },
-  { time: '14:00', latency: 39, download: 108 }, { time: '15:00', latency: 28, download: 119 },
+  { label: 'Passive Monitor', icon: ActivitySquare },
+  { label: 'Carrier Comparison', icon: GitCompare },
+  { label: 'Handheld Detector', icon: Smartphone },
 ];
 function Badge({ quality }) { return <span className={`quality-badge ${quality.toLowerCase()}`}><i />{quality}</span>; }
 function MapFocus({ selected }) { const map = useMap(); useEffect(() => { if (selected) map.flyTo([selected.lat, selected.lng], 17, { duration: .55 }); }, [selected, map]); return null; }
 function Header({ page, onRefresh, apiOnline, signedInAs }) {
-  return <header className="topbar"><div className="breadcrumb"><span>NETSPOT</span><b>/</b><strong>{page}</strong></div><div className="topbar-right"><span className={`connection-pill ${apiOnline ? 'online' : 'offline'}`}><i />{apiOnline ? 'API CONNECTED' : 'API DISCONNECTED'}</span><button className="icon-button" title="Refresh data" onClick={onRefresh}><RefreshCw size={16}/></button><button className="icon-button" title="Notifications"><Bell size={16}/><i className="notification-dot"/></button><span className="top-divider"/><div className="user-chip"><span className="avatar">ND</span><span><b>{signedInAs || 'Network Admin'}</b><small>Demo session</small></span><ChevronDown size={14}/></div></div></header>;
+  return <header className="topbar"><div className="breadcrumb"><span>NETSPOT</span><b>/</b><strong>{page}</strong></div><div className="topbar-right"><span className={`connection-pill ${apiOnline ? 'online' : 'offline'}`}><i />{apiOnline ? 'API CONNECTED' : 'API DISCONNECTED'}</span><button className="icon-button" title="Refresh data" onClick={onRefresh}><RefreshCw size={16}/></button><button className="icon-button" title="Notifications"><Bell size={16}/><i className="notification-dot"/></button><span className="top-divider"/><div className="user-chip"><span className="avatar">ND</span><span><b>{signedInAs || 'Network Admin'}</b><small>Signed-in account</small></span><ChevronDown size={14}/></div></div></header>;
 }
 function PanelTitle({ children, icon: Icon, right }) { return <div className="panel-title"><div>{Icon && <Icon size={15}/>}<span>{children}</span></div>{right}</div>; }
 function StatCard({ label, value, unit, note, icon: Icon, tone = 'cyan', trend }) {
   return <article className="stat-card"><div className="stat-top"><span>{label}</span><span className={`stat-icon ${tone}`}><Icon size={17}/></span></div><div className="stat-value">{value}<small>{unit}</small></div><div className="stat-foot"><span className={trend === 'down' ? 'trend-good' : 'trend-neutral'}>{trend === 'down' ? '↓' : '•'} {note}</span></div><div className={`stat-spark ${tone}`}><span/><span/><span/><span/><span/><span/><span/><span/><span/></div></article>;
 }
-function Dashboard({ locations, history, runTest, testing, result, openMap }) {
-  const avg = history.length ? Math.round(history.reduce((a, x) => a + Number(x.latency || 0), 0) / history.length) : 42;
-  const chartData = history.length ? [...history].slice(0, 8).reverse().map((x, i) => ({ time: x.createdAt ? new Date(x.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : `T${i + 1}`, latency: Number(x.latency || 0), upload: Math.max(15, 65 - Number(x.latency || 0) / 4), download: Math.max(25, 125 - Number(x.latency || 0) / 2) })) : [
-    {time:'00',latency:18,upload:20,download:44},{time:'03',latency:22,upload:26,download:56},{time:'06',latency:17,upload:24,download:48},{time:'09',latency:31,upload:31,download:84},{time:'12',latency:26,upload:29,download:70},{time:'15',latency:34,upload:38,download:105},{time:'18',latency:28,upload:34,download:90},{time:'21',latency:42,upload:41,download:115}
-  ];
-  const nodes = [{x:60,y:95,c:'#35e9df'},{x:80,y:72,c:'#35e9df'},{x:105,y:103,c:'#42e8a1'},{x:124,y:91,c:'#42e8a1'},{x:149,y:116,c:'#42e8a1'},{x:176,y:80,c:'#35e9df'},{x:190,y:105,c:'#42e8a1'},{x:213,y:132,c:'#ffbf4d'},{x:230,y:98,c:'#ffbf4d'},{x:254,y:112,c:'#ff6678'},{x:273,y:87,c:'#ff6678'},{x:300,y:135,c:'#ffbf4d'},{x:320,y:111,c:'#42e8a1'},{x:340,y:143,c:'#ff6678'},{x:365,y:101,c:'#42e8a1'},{x:386,y:128,c:'#ffbf4d'}];
-  return <div className="rms-dashboard">
-    <div className="rms-page-title"><div><span className="rms-kicker">NETWORK OPERATIONS CENTER</span><h1>Dashboard</h1><p>Live overview of network health, device distribution and connectivity performance.</p></div><button className="rms-run" onClick={runTest} disabled={testing}><Play size={15}/>{testing?'Running test…':'Run network test'}</button></div>
-    <div className="rms-layout">
-      <section className="rms-panel rms-status"><div className="rms-panel-title">System Status</div><div className="rms-health"><i/><div><b>Network Healthy</b><strong>98.4%</strong></div></div><div className="rms-rule"/><div className="rms-total">Total Devices: <b>12,450</b></div><div className="rms-mini-counts"><span>Online: 12,015</span><span>Offline: 435</span><span>Warnings: 78</span></div></section>
-      <section className="rms-panel rms-world"><div className="rms-panel-title">Global Device Distribution <span>•••</span></div><div className="rms-world-map"><svg viewBox="0 0 430 245" role="img" aria-label="Illustrative global device distribution map"><defs><pattern id="rmsdots" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.2" fill="#254b70"/></pattern></defs><rect width="430" height="245" fill="url(#rmsdots)" opacity=".18"/><g fill="#254b70" stroke="#31577b" strokeWidth="1.2"><path d="M28 48 L48 30 76 24 92 34 116 32 137 45 126 59 103 65 91 82 70 80 58 97 41 84 36 67 20 61Z"/><path d="M93 96 L112 101 125 122 120 146 109 168 103 194 90 181 87 154 76 133 80 111Z"/><path d="M185 48 L207 36 227 42 238 56 227 67 209 65 200 80 186 71Z"/><path d="M202 77 L225 72 247 83 255 104 245 124 232 139 224 163 211 155 205 129 193 109Z"/><path d="M236 43 L268 28 305 32 331 45 357 43 378 59 368 73 344 72 332 87 306 82 292 97 269 89 253 69 236 63Z"/><path d="M344 111 L367 104 390 115 397 132 383 145 360 141 348 129Z"/><path d="M368 174 L393 168 408 183 399 199 380 194Z"/><path d="M155 33 L170 27 182 34 177 46 164 48Z"/></g><g>{nodes.map((n,i)=><g key={i}><circle cx={n.x+20} cy={n.y+18} r="7" fill={n.c} opacity=".16"/><circle cx={n.x+20} cy={n.y+18} r="4.2" fill={n.c} stroke="#d8faff" strokeWidth=".7"/><circle cx={n.x+20} cy={n.y+18} r="1.5" fill="#062033"/></g>)}</g><g fill="#dce9f8" fontSize="8"><text x="196" y="72">Site 45: London</text><text x="196" y="82" fill="#42e8a1">Status: Online 509</text><text x="196" y="92" fill="#ff6678">Offline: 9</text><text x="20" y="120">Site 12: SF</text><text x="20" y="130" fill="#42e8a1">Status: Online</text><text x="340" y="159">Site 99: Tokyo</text><text x="340" y="169" fill="#42e8a1">Status: Tokyo</text></g></svg></div></section>
-      <section className="rms-panel rms-alerts"><div className="rms-panel-title">Active Alerts <span>•••</span></div><div className="rms-alert critical"><i>!</i><span><b>Critical</b> Device Offline R-459</span><small>2 min ago</small></div><div className="rms-alert warning"><i>▲</i><span><b>Warning</b> High Latency Site 8</span><small>14:36</small></div><div className="rms-alert info"><i>i</i><span><b>Info</b> Firmware Update R 212</span><small>14:30</small></div></section>
-      <section className="rms-panel rms-uptime"><div className="rms-panel-title">Device Uptime</div><div className="rms-gauge"><svg viewBox="0 0 200 120"><defs><linearGradient id="uptimeGradient"><stop offset="0" stopColor="#28d9f1"/><stop offset="1" stopColor="#40e8a4"/></linearGradient></defs><path d="M25 96 A75 75 0 0 1 175 96" fill="none" stroke="#183b54" strokeWidth="11" strokeLinecap="round"/><path d="M25 96 A75 75 0 0 1 175 96" fill="none" stroke="url(#uptimeGradient)" strokeWidth="9" strokeLinecap="round" strokeDasharray="225 240"/></svg><strong>97.6%</strong></div></section>
-      <section className="rms-panel rms-topology"><div className="rms-panel-title">Network Topology View</div><svg viewBox="0 0 500 220" className="rms-topology-svg"><g strokeWidth="2.5" fill="none"><path d="M70 86 L205 40 L330 65 L415 133 L285 180 L110 165 Z" stroke="#35e9a0"/><path d="M70 86 L218 105 L330 65 L285 180 L205 40 L110 165" stroke="#ffb84c"/><path d="M110 165 L218 105 L415 133" stroke="#ff6376"/><path d="M70 86 L330 65 L218 105 L285 180" stroke="#35e9df"/></g>{[{x:70,y:86,t:'Edge_12'},{x:205,y:40,t:'HQ Core'},{x:330,y:65,t:'Edge_12'},{x:415,y:133,t:'Site B'},{x:285,y:180,t:'Site B'},{x:110,y:165,t:'Site A'},{x:218,y:105,t:'Edge A'}].map((n,i)=><g key={i}><circle cx={n.x} cy={n.y} r="14" fill="#0e2b43" stroke="#31dce8" strokeWidth="2"/><circle cx={n.x} cy={n.y} r="5" fill="#31dce8"/><text x={n.x} y={n.y+27} fill="#d4e5f6" fontSize="12" textAnchor="middle">{n.t}</text></g>)}</svg><div className="rms-topology-legend"><span><i className="good"/>Green=Strong</span><span><i className="mid"/>Orange=Moderate</span><span><i className="bad"/>Red=Failed</span></div></section>
-      <section className="rms-panel rms-signal"><div className="rms-panel-title">Signal Strength (dBm) <span>•••</span></div><ResponsiveContainer width="100%" height={150}><BarChart data={[{n:'Region',a:28,b:20},{n:'East',a:23,b:34},{n:'India',a:45,b:29},{n:'Asia',a:37,b:20},{n:'West',a:44,b:31},{n:'Region',a:25,b:18}]}><CartesianGrid stroke="#1d3550" vertical={false}/><XAxis dataKey="n" tick={{fill:'#91a7c0',fontSize:10}} axisLine={false} tickLine={false}/><YAxis tick={{fill:'#91a7c0',fontSize:9}} axisLine={false} tickLine={false} width={25}/><Tooltip contentStyle={{background:'#0c2037',border:'1px solid #294766',color:'#fff'}}/><Bar dataKey="a" fill="#2bd9e8" radius={[2,2,0,0]}/><Bar dataKey="b" fill="#40e5a3" radius={[2,2,0,0]}/></BarChart></ResponsiveContainer></section>
-      <section className="rms-panel rms-latency"><div className="rms-panel-title">Latency (ms) <span>•••</span></div><div className="rms-latency-average"><span>Average</span><b>{result?.latency ?? avg}ms</b></div><ResponsiveContainer width="100%" height={85}><AreaChart data={chartData}><defs><linearGradient id="rmsLatencyFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#28dce9" stopOpacity={.35}/><stop offset="1" stopColor="#28dce9" stopOpacity={0}/></linearGradient></defs><Area dataKey="latency" stroke="#2bd9e8" strokeWidth={2} fill="url(#rmsLatencyFill)"/><XAxis dataKey="time" hide/><YAxis hide/><Tooltip contentStyle={{background:'#0c2037',border:'1px solid #294766',color:'#fff'}}/></AreaChart></ResponsiveContainer><div className="rms-chart-foot"><span>24h</span><span>12h</span><span>24h</span></div></section>
-      <section className="rms-panel rms-bandwidth"><div className="rms-panel-title">Bandwidth Usage (Upload/Download) <span>•••</span></div><ResponsiveContainer width="100%" height={145}><AreaChart data={chartData}><defs><linearGradient id="rmsDl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2bd9e8" stopOpacity={.45}/><stop offset="1" stopColor="#2bd9e8" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="#1d3550" vertical={false}/><XAxis dataKey="time" tick={{fill:'#91a7c0',fontSize:9}} axisLine={false} tickLine={false}/><YAxis hide/><Area dataKey="download" stroke="#2bd9e8" fill="url(#rmsDl)" strokeWidth={2}/><Area dataKey="upload" stroke="#42e7a5" fill="#42e7a5" fillOpacity={.12} strokeWidth={2}/><Tooltip contentStyle={{background:'#0c2037',border:'1px solid #294766',color:'#fff'}}/></AreaChart></ResponsiveContainer></section>
-      <section className="rms-panel rms-clients"><div className="rms-panel-title">Connected Clients <span>•••</span></div><ResponsiveContainer width="100%" height={145}><AreaChart data={[{t:'00',v:12},{t:'04',v:14},{t:'08',v:13},{t:'12',v:21},{t:'16',v:24},{t:'20',v:25},{t:'24',v:32},{t:'28',v:31},{t:'32',v:36}]}><defs><linearGradient id="rmsClientFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2bd9e8" stopOpacity={.4}/><stop offset="1" stopColor="#2bd9e8" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="#1d3550" vertical={false}/><XAxis dataKey="t" tick={{fill:'#91a7c0',fontSize:9}} axisLine={false} tickLine={false}/><YAxis hide/><Area dataKey="v" stroke="#2bd9e8" fill="url(#rmsClientFill)" strokeWidth={2}/><Tooltip contentStyle={{background:'#0c2037',border:'1px solid #294766',color:'#fff'}}/></AreaChart></ResponsiveContainer></section>
-    </div>
-    <div className="rms-dashboard-bottom"><span><i/> Live sample dashboard</span><span>{history.length} saved network tests</span><button onClick={openMap}><MapPinned size={13}/> Open dead zone map</button></div>
+function WorldTopology({ locations }) {
+  const points = locations.filter(p => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && p.lat !== null && p.lng !== null)
+    .map((p, i) => ({ ...p, x: (Number(p.lng) + 180) / 360 * 800, y: (90 - Number(p.lat)) / 180 * 320, order: Date.parse(p.date || p.timestamp || 0) || i }))
+    .sort((a,b) => a.order - b.order);
+  const color = q => q === 'Good' ? '#42dfa4' : q === 'Moderate' ? '#ffbd52' : '#ff6877';
+  return <div className="world-topology-wrap">
+    <svg className="world-topology-svg" viewBox="0 0 800 320" role="img" aria-label="World map topology with actual saved survey points">
+      <defs><pattern id="topology-grid" width="40" height="32" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 32" fill="none" stroke="#21415d" strokeWidth=".65"/></pattern><filter id="node-glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+      <rect width="800" height="320" fill="url(#topology-grid)"/>
+      <g fill="#193b55" stroke="#2b5672" strokeWidth="1.1" opacity=".9">
+        <path d="M50 67 L72 43 112 31 147 43 166 62 158 83 138 92 127 112 105 119 91 147 70 133 63 105 43 91Z"/><path d="M145 153 L168 163 181 191 173 223 158 255 145 239 137 209 125 185Z"/><path d="M215 58 L245 42 276 49 296 63 326 61 346 78 375 81 396 103 382 120 349 117 329 137 306 126 292 104 268 105 254 88 228 88Z"/><path d="M321 143 L346 131 373 143 389 169 382 201 365 226 349 215 341 185 324 165Z"/><path d="M395 72 L433 51 480 49 510 62 545 53 581 67 621 65 663 80 690 104 674 124 644 118 623 139 597 133 573 149 551 133 528 140 508 123 484 133 461 116 440 117 426 97 400 96Z"/><path d="M462 152 L492 143 522 156 538 181 529 208 511 229 492 218 478 192 464 177Z"/><path d="M624 189 L649 180 676 193 688 214 674 232 650 225 634 211Z"/><path d="M715 143 L730 136 742 149 737 169 722 173 714 159Z"/>
+      </g>
+      {[...new Set(points.filter(p=>p.walkSessionId).map(p=>p.walkSessionId))].map(sessionId=>{const route=points.filter(p=>p.walkSessionId===sessionId);return route.length>1?<polyline key={sessionId} points={route.map(p=>`${p.x},${p.y}`).join(' ')} fill="none" stroke="#43dce9" strokeWidth="1.5" strokeDasharray="4 5" opacity=".9"/>:null})}
+      {points.map((p,i)=><g key={p.id ?? `${p.x}-${p.y}-${i}`} filter="url(#node-glow)"><circle cx={p.x} cy={p.y} r="5.2" fill={color(p.quality)} stroke="#d9fbff" strokeWidth="1.2"><title>{`${p.name || p.locationName || 'Survey point'} · ${p.quality || 'Unknown'} · ${p.lat}, ${p.lng}`}</title></circle><circle cx={p.x} cy={p.y} r="10" fill="none" stroke={color(p.quality)} strokeWidth="1" opacity=".45"/></g>)}
+      <g fill="#82a9c4" fontSize="10" letterSpacing="1.2"><text x="18" y="20">LAT/LON PROJECTION</text><text x="782" y="304" textAnchor="end">{points.length} REAL SAVED POINT{points.length===1?'':'S'}</text></g>
+    </svg>
+    {!points.length && <div className="world-topology-empty"><RadioTower size={24}/><strong>No mapped measurements yet</strong><span>Run a location-enabled test or start a walk-test survey to add real topology points.</span></div>}
+    <div className="world-topology-legend"><span><i style={{background:'#42dfa4'}}/>Good</span><span><i style={{background:'#ffbd52'}}/>Moderate</span><span><i style={{background:'#ff6877'}}/>Poor / dead zone</span></div>
+  </div>;
+}
+
+function Dashboard({ locations, history, runTest, testing, result, openMap, loadingData }) {
+  const measured = history.filter(r => r && r.isMeasured === true);
+  const valid = history.filter(r => r && r.isMeasured !== false);
+  const numericAvg = (keys) => {
+    const vals = valid.map(r => { for (const k of keys) { const n = r[k] == null || r[k] === '' ? NaN : Number(r[k]); if (Number.isFinite(n)) return n; } return NaN; }).filter(Number.isFinite);
+    return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : '—';
+  };
+  const avgLatency = numericAvg(['latencyMs','latency']);
+  const avgDownload = numericAvg(['downloadMbps','download']);
+  const avgUpload = numericAvg(['uploadMbps','upload']);
+  const poor = valid.filter(r => ['Poor','Dead Zone','Unstable','Outage','Connectivity Failure'].includes(r.quality)).length;
+  const latest = history[0] || null;
+  const qualityCount = q => valid.filter(r => r.quality === q).length;
+  const chartData = [...valid].slice(0,10).reverse().map((r,i)=>({time:r.timestamp?new Date(r.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):`Test ${i+1}`,latency:Number.isFinite(Number(r.latencyMs??r.latency))?Number(r.latencyMs??r.latency):null,download:Number.isFinite(Number(r.downloadMbps??r.download))?Number(r.downloadMbps??r.download):null,upload:Number.isFinite(Number(r.uploadMbps??r.upload))?Number(r.uploadMbps??r.upload):null}));
+  const mapped = locations.filter(l=>Number.isFinite(Number(l.lat))&&Number.isFinite(Number(l.lng))&&l.lat!==null&&l.lng!==null);
+  const mapCenter = mapped.length ? [Number(mapped[0].lat),Number(mapped[0].lng)] : [20.5937,78.9629];
+  const qColor = q => q==='Good'?'#42dfa4':q==='Moderate'?'#ffbd52':'#ff6877';
+  const alerts = history.filter(r=>['Poor','Dead Zone','Unstable','Outage','Connectivity Failure'].includes(r.quality)).slice(0,3);
+  return <div className="legacy-dashboard">
+    <div className="legacy-dashboard-heading"><div><div className="legacy-overline">NETWORK OPERATIONS CENTER</div><h1>Network Intelligence Dashboard</h1><p>Monitor connectivity, identify weak signal areas, and review actual saved network measurements.</p>{loadingData&&<small role="status">Loading saved measurements…</small>}</div><button className="ops-run-button" onClick={runTest} disabled={testing}>{testing?<RefreshCw size={16} className="spin"/>:<Play size={16}/>} {testing?'TESTING…':'RUN NETWORK TEST'}</button></div>
+    {result&&<div className="ops-result"><CheckCircle2 size={20}/><div><strong>Network test completed</strong><span>{result.latencyMs??result.latency??'—'} ms latency · Results are stored measurements, not sample dashboard data.</span></div></div>}
+    <div className="legacy-dashboard-grid">
+      <section className="legacy-panel legacy-status"><div className="legacy-panel-title"><span>SYSTEM STATUS</span><Activity size={17}/></div><div className="legacy-health"><i/><div><small>MEASUREMENT STATUS</small><strong>{history.length?'Monitoring Active':'Awaiting First Test'}</strong></div></div><div className="legacy-score"><strong>{history.length}</strong><span>Saved measurements</span></div><div className="legacy-divider"/><div className="legacy-quality-row"><span><i className="good-dot"/>Good</span><strong>{qualityCount('Good')} records</strong></div><div className="legacy-quality-row"><span><i className="moderate-dot"/>Moderate</span><strong>{qualityCount('Moderate')} records</strong></div><div className="legacy-quality-row"><span><i className="poor-dot"/>Poor / dead zone</span><strong>{poor} records</strong></div></section>
+      <section className="legacy-panel legacy-map"><div className="legacy-panel-title"><span>WORLD NETWORK TOPOLOGY</span><span className="legacy-tag">{mapped.length} GEOLOCATED</span></div><div className="legacy-map-preview"><WorldTopology locations={mapped}/></div><button className="legacy-open-map" onClick={openMap}>Open Dead Zone Map <MapPin size={14}/></button></section>
+      <section className="legacy-panel legacy-insights"><div className="legacy-panel-title"><span>CONNECTIVITY INSIGHTS</span><Bell size={16}/></div>{alerts.length?alerts.map((r,i)=><div className="legacy-alert" key={r.id??i}><AlertTriangle size={15}/><div><strong>{r.quality||'Connectivity issue'}</strong><small>{r.locationName||r.surveyName||'Location not shared'} · {r.timestamp?new Date(r.timestamp).toLocaleString():'time unavailable'}</small></div></div>):<div className="legacy-no-alert"><CheckCircle2 size={17}/><div><strong>No saved poor-quality records</strong><small>Insights appear when measurements report a connectivity issue.</small></div></div>}<div className="legacy-footnote">Only saved records are used. No demo alerts are generated.</div></section>
+      <section className="legacy-panel legacy-metric"><div className="legacy-panel-title"><span>AVERAGE LATENCY</span><Activity size={17}/></div><div className="legacy-big-value">{avgLatency}{avgLatency==='—'?'':' ms'}</div><div className="legacy-subtitle">Across saved records with latency data</div></section>
+      <section className="legacy-panel legacy-metric"><div className="legacy-panel-title"><span>DOWNLOAD / UPLOAD</span><Gauge size={17}/></div><div className="legacy-big-value">{avgDownload}<small>{avgDownload==='—'?'':' Mbps'}</small></div><div className="legacy-subtitle">Average download · Upload: {avgUpload}{avgUpload==='—'?'':' Mbps'}</div></section>
+      <section className="legacy-panel legacy-metric"><div className="legacy-panel-title"><span>LATEST TEST</span><Clock3 size={17}/></div><div className="legacy-big-value">{latest?(latest.quality||'Unclassified'):'—'}</div><div className="legacy-subtitle">{latest?(latest.timestamp?new Date(latest.timestamp).toLocaleString():'Saved measurement'):'Run a test to see your latest result'}</div></section>
+      <section className="legacy-panel legacy-chart"><div className="legacy-panel-title"><span>RECENT LATENCY TREND</span><Activity size={17}/></div>{chartData.some(r=>r.latency!==null)?<ResponsiveContainer width="100%" height={135}><AreaChart data={chartData}><CartesianGrid stroke="#1d3550" vertical={false}/><XAxis dataKey="time" tick={{fill:'#91a7c0',fontSize:10}}/><YAxis hide/><Tooltip/><Area type="monotone" dataKey="latency" name="Latency (ms)" connectNulls={false} stroke="#2bd9e8" fill="#2bd9e8" fillOpacity={.15}/></AreaChart></ResponsiveContainer>:<div className="legacy-empty">No latency measurements yet. Run a network test to populate this chart.</div>}</section>
+    </div><div className="legacy-dashboard-footer"><span><i/> Live backend records</span><span>{measured.length} verified measured records · {locations.length} mapped points</span><button onClick={openMap}><MapPinned size={14}/> Open Dead Zone Map</button></div>
   </div>;
 }
 
@@ -93,25 +114,209 @@ function CoverageChart() {
   const data = [{name:'SNR (dBm)',Excellent:26,Good:28,Fair:4,Poor:1}];
   return <div className="coverage-chart"><div className="coverage-chart-title">Signal Strength Distribution</div><div className="coverage-chart-body"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{top:18,right:4,left:-15,bottom:8}}><CartesianGrid stroke="#e5e9ec" vertical={false}/><XAxis dataKey="name" tick={{fontSize:10,fill:'#617783'}} axisLine={{stroke:'#d9e1e5'}} tickLine={false}/><YAxis domain={[0,30]} ticks={[0,5,10,15,20,25,30]} tick={{fontSize:10,fill:'#53666f'}} axisLine={false} tickLine={false}/><Tooltip/><Bar dataKey="Excellent" fill="#51b66d"/><Bar dataKey="Good" fill="#e6d83b"/><Bar dataKey="Fair" fill="#f4ad27"/><Bar dataKey="Poor" fill="#e94343"/></BarChart></ResponsiveContainer><div className="coverage-legend"><span><i style={{background:'#51b66d'}}/>Excellent</span><span><i style={{background:'#e6d83b'}}/>Good</span><span><i style={{background:'#f4ad27'}}/>Fair</span><span><i style={{background:'#e94343'}}/>Poor</span></div></div></div>;
 }
-function MapScreen({ locations }) {
+
+function ThresholdRecommendationPanel({ marks }) {
+  const [networkType, setNetworkType] = useState('Wi-Fi');
+  const [wifiThreshold, setWifiThreshold] = useState(-70);
+  const [cellularThreshold, setCellularThreshold] = useState(-110);
+  const [fix, setFix] = useState('mesh');
+  const [budget, setBudget] = useState('medium');
+  const [placement, setPlacement] = useState('central');
+  const measured = marks.filter(m => Number.isFinite(Number(m.signalDbm)) && m.signalDbm !== null);
+  const threshold = networkType === 'Wi-Fi' ? Number(wifiThreshold) : Number(cellularThreshold);
+  const weak = measured.filter(m => Number(m.signalDbm) < threshold);
+  const options = {
+    router: { title:'Upgrade or reposition the router', cost:'Low–medium', gain:8, detail:'Move the existing router to an open, central, elevated position; avoid cabinets and large obstructions.' },
+    mesh: { title:'Add a mesh node', cost:'Medium–high', gain:14, detail:'Place a mesh node between the router and weak rooms, where it still receives a reliable backhaul signal.' },
+    repeater: { title:'Add a Wi-Fi repeater/extender', cost:'Low–medium', gain:9, detail:'Place the extender about halfway to the weak area, not inside the dead zone. Throughput may decrease on single-radio repeaters.' },
+    ap: { title:'Add a wired access point', cost:'Medium–high', gain:18, detail:'Use Ethernet backhaul and place an access point closer to the weak rooms for the most predictable improvement.' }
+  };
+  const selected = options[fix];
+  const estimated = Math.min(25, selected.gain + (placement === 'central' ? 3 : placement === 'weak-edge' ? 0 : -2) + (budget === 'high' ? 2 : budget === 'low' ? -2 : 0));
+  return <section className="panel threshold-panel"><div className="panel-title"><div><ShieldCheck size={15}/> Signal thresholds & fix recommendations</div><span className="map-count">Rule-based estimate</span></div>
+    <p className="floorplan-help">Classifies measured points against explicit thresholds and compares a proposed fix. Predicted gains are planning estimates, not guarantees or live RF simulations.</p>
+    <div className="threshold-controls">
+      <label>Network type<select value={networkType} onChange={e=>setNetworkType(e.target.value)}><option>Wi-Fi</option><option>Cellular</option></select></label>
+      {networkType==='Wi-Fi' ? <label>Weak-signal threshold (dBm)<input type="number" min="-100" max="-30" value={wifiThreshold} onChange={e=>setWifiThreshold(e.target.value)}/></label> : <label>Cellular RSRP threshold (dBm)<input type="number" min="-140" max="-70" value={cellularThreshold} onChange={e=>setCellularThreshold(e.target.value)}/></label>}
+      <label>Proposed fix<select value={fix} onChange={e=>setFix(e.target.value)}><option value="router">Router reposition/upgrade</option><option value="mesh">Mesh node</option><option value="repeater">Wi-Fi repeater/extender</option><option value="ap">Wired access point</option></select></label>
+      <label>Budget range<select value={budget} onChange={e=>setBudget(e.target.value)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+      <label>Placement plan<select value={placement} onChange={e=>setPlacement(e.target.value)}><option value="central">Central/open location</option><option value="weak-edge">Near edge of weak area</option><option value="far">Far end of weak area</option></select></label>
+    </div>
+    <div className="threshold-summary"><div><small>Measured points</small><b>{measured.length}</b></div><div><small>Below threshold</small><b className={weak.length?'threshold-bad':''}>{networkType==='Wi-Fi'?weak.length:'—'}</b></div><div><small>Classification</small><b>{networkType==='Wi-Fi'?(weak.length?'Weak/dead-zone candidates':'No points below threshold'):'Threshold configured'}</b></div></div>
+    {networkType==='Cellular'&&<p className="threshold-note">Cellular threshold applies to RSRP (not Wi-Fi RSSI). This floor-plan form currently stores Wi-Fi RSSI only, so cellular points are not classified until actual cellular RSRP measurements are added.</p>}
+    <div className="recommendation-result"><div className="recommendation-heading"><Router size={17}/><b>{selected.title}</b><span>{selected.cost} cost</span></div><p>{selected.detail}</p><div className="recommendation-impact"><span>Illustrative predicted improvement</span><strong>~{estimated} dB</strong></div><small>Heuristic estimate only. Actual change depends on building materials, channel congestion, device capabilities, backhaul and placement. Verify by repeating measurements at the same points after installation.</small></div>
+    {networkType==='Wi-Fi'&&weak.length>0&&<div className="threshold-weak-list"><b>Points to prioritize</b>{weak.map(m=><div key={m.id}><span>{m.label}</span><strong>{m.signalDbm} dBm</strong><small>{Number(m.signalDbm)<=-80?'Very weak':Number(m.signalDbm)<-70?'Weak':'Below configured threshold'}</small></div>)}</div>}
+  </section>;
+}
+
+function FloorPlanSurvey({ onSaved }) {
+  const [floorPlan, setFloorPlan] = useState(() => { try { return JSON.parse(localStorage.getItem('netspot-floorplan-image') || 'null'); } catch { return null; } });
+  const [marks, setMarks] = useState(() => { try { return JSON.parse(localStorage.getItem('netspot-floorplan-marks') || '[]'); } catch { return []; } });
+  const [pending, setPending] = useState(null);
+  const [label, setLabel] = useState('Floor-plan point');
+  const [rssi, setRssi] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { try { if (floorPlan) localStorage.setItem('netspot-floorplan-image', JSON.stringify(floorPlan)); else localStorage.removeItem('netspot-floorplan-image'); } catch { setError('Could not persist this floor-plan image. Try a smaller image (under 2 MB).'); } }, [floorPlan]);
+  useEffect(() => { try { localStorage.setItem('netspot-floorplan-marks', JSON.stringify(marks)); } catch { setError('Floor-plan annotations could not be saved in this browser storage.'); } }, [marks]);
+  const upload = event => { const file = event.target.files?.[0]; if (!file) return; setError(''); if (!file.type.startsWith('image/')) { setError('Choose a PNG, JPG, or other image file.'); return; } if (file.size > 2 * 1024 * 1024) { setError('For reliable local persistence, choose an image under 2 MB.'); return; } const reader = new FileReader(); reader.onload = () => { setFloorPlan({ name: file.name, dataUrl: String(reader.result) }); setMarks([]); setPending(null); }; reader.onerror = () => setError('The floor-plan image could not be read.'); reader.readAsDataURL(file); };
+  const choosePoint = event => { const rect = event.currentTarget.getBoundingClientRect(); setPending({ x: Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)), y: Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)) }); setError(''); };
+  const savePoint = async () => {
+    if (!pending) return; const cleanLabel = label.trim() || `Floor-plan point ${marks.length + 1}`; const value = rssi.trim() === '' ? null : Number(rssi);
+    if (value !== null && (!Number.isFinite(value) || value < -120 || value > 0)) { setError('RSSI must be between -120 and 0 dBm.'); return; }
+    const mark = { id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, label: cleanLabel, x: pending.x, y: pending.y, signalDbm: value, quality: value === null ? 'Unmeasured' : value >= -60 ? 'Good' : value >= -70 ? 'Moderate' : 'Poor', createdAt: new Date().toISOString(), floorPlanName: floorPlan?.name || 'Floor plan' };
+    if (value !== null) {
+      setSaving(true); setError('');
+      try { const response = await apiFetch(`${API}/api/network-tests`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ locationName:cleanLabel, surveyName:`Floor plan: ${floorPlan?.name || 'Uploaded plan'}`, floorPlanName:floorPlan?.name || 'Uploaded plan', floorPlanX:Number((pending.x/100).toFixed(6)), floorPlanY:Number((pending.y/100).toFixed(6)), signalDbm:value, signalMethod:'manual-floorplan-rssi', signalDbmIsEstimate:false, isMeasured:true, source:'floor-plan-survey', connected:true, gatewayReachable:true, internetReachable:true, serverReachable:true, sampleCount:1 }) }); if (!response.ok) { const body = await response.json().catch(()=>({})); throw new Error(body.message || `Could not save measurement (${response.status}). Sign in and check the backend.`); } const body = await response.json(); mark.recordId = body.data?.id || null; onSaved?.(); } catch (e) { setError(e.message || 'Could not save measurement.'); setSaving(false); return; } setSaving(false);
+    }
+    setMarks(prev => [...prev, mark]); setPending(null); setLabel('Floor-plan point'); setRssi('');
+  };
+  return <section className="panel floorplan-panel"><div className="panel-title"><div><ImageUp size={15}/> Floor-plan marking</div><span className="map-count">{marks.length} marked point{marks.length===1?'':'s'}</span></div>
+    <p className="floorplan-help">Upload a floor-plan image, then click anywhere on it to place a point. Add an actual RSSI reading if you have one; unmeasured markers are saved as local annotations, not signal readings.</p>
+    <div className="floorplan-toolbar"><label className="nt-button muted floorplan-upload"><ImageUp size={14}/>{floorPlan ? 'Replace floor plan' : 'Upload floor plan'}<input type="file" accept="image/*" onChange={upload}/></label>{floorPlan&&<><span className="floorplan-filename">{floorPlan.name}</span><button className="nt-button muted" onClick={()=>{setFloorPlan(null);setMarks([]);setPending(null);setError('');}}>Clear plan</button></>}</div>
+    {floorPlan ? <><div className="floorplan-canvas" onClick={choosePoint} role="button" tabIndex={0} aria-label="Click to place a floor-plan measurement point" onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();setPending({x:50,y:50});}}}><img src={floorPlan.dataUrl} alt={`Uploaded floor plan: ${floorPlan.name}`}/>{marks.map((m,i)=><span key={m.id} className={`floorplan-marker ${m.signalDbm!==null?'measured':''}`} style={{left:`${m.x}%`,top:`${m.y}%`,background:m.signalDbm===null?'#5da8ff':m.signalDbm>=-60?'#2ed6a1':m.signalDbm>=-70?'#ffbd4a':'#ff5364'}} title={`${m.label}${m.signalDbm===null?' · annotation only':` · ${m.signalDbm} dBm`}`}><b>{i+1}</b></span>)}{pending&&<span className="floorplan-marker pending" style={{left:`${pending.x}%`,top:`${pending.y}%`}}><Crosshair size={14}/></span>}</div>
+      {pending&&<div className="floorplan-point-form"><label>Point label<input value={label} onChange={e=>setLabel(e.target.value)} maxLength={120}/></label><label>Measured Wi-Fi RSSI (dBm, optional)<input type="number" min="-120" max="0" step="1" value={rssi} onChange={e=>setRssi(e.target.value)} placeholder="e.g. -67"/></label><button className="nt-button primary" onClick={savePoint} disabled={saving}>{saving?'Saving…':'Save point'}</button><button className="nt-button muted" onClick={()=>setPending(null)}>Cancel</button></div>}
+      {marks.length>0&&<div className="floorplan-mark-list">{marks.map((m,i)=><div key={m.id}><span className="floorplan-list-dot" style={{background:m.signalDbm===null?'#5da8ff':m.signalDbm>=-60?'#2ed6a1':m.signalDbm>=-70?'#ffbd4a':'#ff5364'}}/><span><b>{i+1}. {m.label}</b><small>{m.signalDbm===null?'Annotation only':`${m.signalDbm} dBm · ${m.quality}`} · {new Date(m.createdAt).toLocaleString()}</small></span><button className="text-button history-delete" onClick={()=>setMarks(prev=>prev.filter(x=>x.id!==m.id))} aria-label={`Delete ${m.label}`}><X size={14}/></button></div>)}</div>}
+    </> : <div className="floorplan-empty"><ImageUp size={24}/><b>No floor plan uploaded</b><span>Choose a floor-plan image to start placing indoor survey points.</span></div>}
+    {error&&<p className="floorplan-error" role="alert">{error}</p>}
+    <ThresholdRecommendationPanel marks={marks}/>
+  </section>;
+}
+
+function MapScreen({ history, onRefresh }) {
   const [query, setQuery] = useState('');
   const [quality, setQuality] = useState('All');
-  const [date, setDate] = useState('all');
-  const [selectedId, setSelectedId] = useState(1);
-  const filtered = useMemo(() => locations.filter(l => (`${l.name} ${l.area}`).toLowerCase().includes(query.toLowerCase()) && (quality === 'All' || l.quality === quality) && (date === 'all' || l.date === date)), [locations,query,quality,date]);
-  const selected = filtered.find(l => l.id === selectedId) || filtered[0] || locations[0] || null;
-  const center = selected ? [selected.lat, selected.lng] : [18.4575,73.8217];
-  const hexes = useMemo(() => makeHexSurvey(locations), [locations]);
-  return <div className="survey-screen">
-    <div className="survey-topline"><div className="survey-appmark">V</div><div className="survey-title">WiFi Coverage Survey Historical</div><div className="survey-top-spacer"/><span className="survey-search-user"><Search size={13}/> demo</span><span className="survey-user"><span>♟</span> Demo V-App <ChevronDown size={13}/></span></div>
-    <div className="survey-toolbar"><div className="survey-rail"><button title="Survey home">⌂</button><button title="Coverage surveys">▣</button><button title="Access points">▰</button><button title="Wi-Fi">◉</button><button title="Battery">▰</button></div><div className="survey-workspace">
-      <div className="survey-controls"><label><CalendarDays size={13}/><input type="date" aria-label="Survey start date" defaultValue="2026-10-08"/></label><span className="survey-date-dash">–</span><label><input type="date" aria-label="Survey end date" defaultValue="2026-10-18"/></label><span className="survey-survey-label">Coverage Survey</span><div className="survey-filter-spacer"/><label className="survey-search"><Search size={13}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search location"/></label><select aria-label="Quality filter" value={quality} onChange={e=>setQuality(e.target.value)}><option>All</option><option>Good</option><option>Moderate</option><option>Poor</option></select></div>
-      <div className="survey-columns"><div className="survey-left-column"><CoverageChart/><section className="access-points"><h3>Access Points</h3><table><thead><tr><th>Name</th><th>Model</th></tr></thead><tbody>{['Access Point MR2','Access Point MR1','Access Point MR3'].map((name,i)=><tr key={name}><td>{name}</td><td>{['MR32','MR33','MR33'][i]}</td></tr>)}</tbody></table><div className="survey-match-count">Showing {filtered.length} matching survey locations</div></section></div>
-      <section className="survey-map-panel"><div className="survey-map-caption">Coverage Survey <span>{selected ? `${selected.name} · ${selected.signal} dBm` : 'No matching locations'}</span></div><div className="survey-map-wrap"><MapContainer key="coverage-survey-map" center={center} zoom={18} scrollWheelZoom zoomControl={false} attributionControl={true}><TileLayer attribution="Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics" url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"/><ZoomControl position="topleft"/><SurveyZoomBridge/>{hexes.map(cell=><Polygon key={cell.id} positions={cell.positions} pathOptions={{color:cell.color,fillColor:cell.color,fillOpacity:.72,weight:.7,opacity:.8}}><Popup><b>Coverage sample</b><br/>Estimated signal: {cell.signal} dBm<br/>Illustrative survey grid</Popup></Polygon>)}{filtered.map(loc=><CircleMarker key={loc.id} center={[loc.lat,loc.lng]} radius={selected?.id===loc.id?8:6} pathOptions={{color:'#0879bd',fillColor:'#0879bd',fillOpacity:1,weight:2}} eventHandlers={{click:()=>setSelectedId(loc.id)}}><Popup><b>{loc.name}</b><br/>{loc.area}<br/>Signal: {loc.signal} dBm<br/>Latency: {loc.latency} ms<br/>Quality: {loc.quality}</Popup></CircleMarker>)}</MapContainer><div className="survey-map-tools"><button title="Zoom in" onClick={()=>window.dispatchEvent(new CustomEvent('netspot-map-zoom',{detail:1}))}>＋</button><button title="Zoom out" onClick={()=>window.dispatchEvent(new CustomEvent('netspot-map-zoom',{detail:-1}))}>−</button><button title="Home view" onClick={()=>setSelectedId(filtered[0]?.id || 1)}>⌂</button></div><div className="survey-scale"><span>-95.00</span><i /><span>-30.00</span></div></div><div className="survey-map-status">{selected ? <><b>{selected.name}</b> · {selected.area} · {selected.signal} dBm · {selected.latency} ms</> : 'No locations match your filters'} <span>Hexagon colors show estimated signal strength</span></div></section></div>
-    </div></div>
+  const [sourceFilter, setSourceFilter] = useState('All');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [selectedId, setSelectedId] = useState(null);
+  const [heatmapMode, setHeatmapMode] = useState('Auto');
+  const points = useMemo(() => history.filter(r => Number.isFinite(Number(r.lat)) && Number.isFinite(Number(r.lng)) && r.lat !== null && r.lng !== null).map(r => ({
+    ...r, name: r.locationName || r.location || 'Survey point',
+    lat: Number(r.lat), lng: Number(r.lng), quality: r.quality || 'Unknown',
+    measured: r.isMeasured !== false, date: (r.timestamp || r.createdAt || '').slice(0,10),
+    latency: r.latencyMs ?? r.latency, jitter: r.jitterMs ?? r.jitter,
+    loss: r.packetLossPct ?? r.loss, download: r.downloadMbps ?? r.download,
+    upload: r.uploadMbps ?? r.upload, signal: r.signalDbm ?? r.rssi ?? null, signalQualityPct:r.signalQualityPct??null, estimatedSignalDbm:r.estimatedSignalDbm??null, signalMethod:r.signalMethod??null
+  })), [history]);
+  const filtered = useMemo(() => points.filter(p =>
+    (`${p.name} ${p.surveyName || ''}`).toLowerCase().includes(query.toLowerCase()) &&
+    (quality === 'All' || p.quality === quality || (quality === 'Dead Zone' && p.isDeadZone)) &&
+    (sourceFilter === 'All' || (sourceFilter === 'Measured' ? p.measured : !p.measured)) &&
+    (!fromDate || p.date >= fromDate) && (!toDate || p.date <= toDate)
+  ), [points, query, quality, sourceFilter, fromDate, toDate]);
+  const selected = filtered.find(p => p.id === selectedId) || filtered[0] || null;
+  const center = selected ? [selected.lat, selected.lng] : points.length ? [points[0].lat, points[0].lng] : [18.4575,73.8217];
+  const colorFor = q => /dead zone|outage|poor|unstable|connectivity failure/i.test(q || '') ? '#ff5364' : /moderate|fair/i.test(q || '') ? '#ffbd4a' : /good/i.test(q || '') ? '#2ed6a1' : '#8aa1ba';
+  const actualRssiCount = filtered.filter(p => p.measured && p.signalDbmIsEstimate !== true && Number.isFinite(Number(p.signal)) && p.signal !== null && p.signal !== '').length;
+  const effectiveHeatmapMode = heatmapMode === 'Auto' ? (actualRssiCount >= 3 ? 'RSSI' : 'Latency') : heatmapMode;
+  const heatmapMetric = effectiveHeatmapMode === 'RSSI' ? 'signal' : 'latency';
+  const heatmapSamples = filtered.filter(p => p.measured && (heatmapMetric === 'signal' ? p.signalDbmIsEstimate !== true && Number.isFinite(Number(p.signal)) && p.signal !== null && p.signal !== '' : Number.isFinite(Number(p.latency)) && p.latency !== null && p.latency !== ''));
+  const cells = useMemo(() => {
+    const measured = filtered.filter(p => p.measured && (heatmapMetric === 'signal' ? p.signalDbmIsEstimate !== true && Number.isFinite(Number(p.signal)) && p.signal !== null && p.signal !== '' : Number.isFinite(Number(p.latency)) && p.latency !== null && p.latency !== ''));
+    if (measured.length < 3) return [];
+    const minLat=Math.min(...measured.map(p=>p.lat)), maxLat=Math.max(...measured.map(p=>p.lat));
+    const minLng=Math.min(...measured.map(p=>p.lng)), maxLng=Math.max(...measured.map(p=>p.lng));
+    const latSpan=Math.max(maxLat-minLat,0.00025), lngSpan=Math.max(maxLng-minLng,0.00025);
+    const result=[];
+    for(let y=0;y<7;y++) for(let x=0;x<7;x++) {
+      const lat=minLat-latSpan*.12+(y/6)*latSpan*1.24, lng=minLng-lngSpan*.12+(x/6)*lngSpan*1.24;
+      let weighted=0, weights=0, nearest=Infinity;
+      measured.forEach(p=>{const d=Math.hypot((p.lat-lat)*111000,(p.lng-lng)*111000*Math.cos(lat*Math.PI/180));nearest=Math.min(nearest,d);const w=1/Math.max(d,8)**2;weighted+=Number(heatmapMetric==='signal'?p.signal:p.latency)*w;weights+=w;});
+      const value=weighted/weights;
+      const q=heatmapMetric==='signal'?(value>=-60?'Good':value>=-70?'Moderate':'Poor'):(value<=50?'Good':value<=100?'Moderate':'Poor');
+      const halfLat=latSpan/6*.45, halfLng=lngSpan/6*.45;
+      const color=q==='Good'?'#2ed6a1':q==='Moderate'?'#ffbd4a':'#ff5364';
+      result.push({id:`${x}-${y}`,value,q,uncertainty:nearest>250?'High':nearest>100?'Medium':'Low',positions:[[lat-halfLat,lng-halfLng],[lat-halfLat,lng+halfLng],[lat+halfLat,lng+halfLng],[lat+halfLat,lng-halfLng]],color});
+    }
+    return result;
+  }, [filtered, heatmapMetric]);
+  return <div className="functional-map-screen">
+    <div className="nt-page-header"><div><div className="eyebrow">LOCATION INTELLIGENCE</div><h1>Functional Dead Zone Map</h1><p>Map pins come from saved survey measurements. Coverage between points is interpolated and marked with uncertainty.</p></div><button className="nt-button muted" onClick={onRefresh}><RefreshCw size={14}/> Refresh survey data</button></div>
+    <div className="functional-map-filters">
+      <label className="map-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search location or survey name"/></label>
+      <label><Filter size={14}/><select value={quality} onChange={e=>setQuality(e.target.value)}><option value="All">All quality</option><option>Good</option><option>Moderate</option><option>Poor</option><option>Dead Zone</option><option>Unstable</option><option>Outage</option></select></label>
+      <label><select value={sourceFilter} onChange={e=>setSourceFilter(e.target.value)}><option>All</option><option>Measured</option><option>Simulated</option></select></label>
+      <label><span>From</span><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}/></label>
+      <label><span>To</span><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)}/></label>
+      <label><Layers size={14}/><select aria-label="Heatmap metric" value={heatmapMode} onChange={e=>setHeatmapMode(e.target.value)}><option>Auto</option><option>RSSI</option><option>Latency</option></select></label>
+      <span className="map-result-count">{filtered.length} point{filtered.length===1?'':'s'}</span>
+    </div>
+    <FloorPlanSurvey onSaved={onRefresh}/>
+    <div className="functional-map-layout">
+      <section className="panel functional-map-panel"><div className="panel-title"><div><MapPinned size={15}/> Collected survey points and coverage</div><span className="map-count">{points.filter(p=>p.measured).length} measured · {points.filter(p=>!p.measured).length} sample</span></div>
+        <div className="functional-leaflet-map">
+        {points.length ? <MapContainer center={center} zoom={16} scrollWheelZoom zoomControl={false} key={`${center[0]}-${center[1]}`}><TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/><ZoomControl position="topright"/>
+          {cells.map(c=><Polygon key={c.id} positions={c.positions} pathOptions={{color:c.color,fillColor:c.color,fillOpacity:.20,weight:1,dashArray:c.uncertainty==='High'?'4 4':undefined}}><Popup><b>Interpolated coverage</b><br/>{heatmapMetric==='signal'?`Estimated RSSI: ${c.value.toFixed(1)} dBm`:`Estimated latency: ${c.value.toFixed(1)} ms`}<br/>Estimated quality: {c.q}<br/>Uncertainty: {c.uncertainty}<br/><small>Estimate only — not a direct measurement</small></Popup></Polygon>)}
+          {filtered.map(p=><CircleMarker key={p.id} center={[p.lat,p.lng]} radius={selected?.id===p.id?10:7} eventHandlers={{click:()=>setSelectedId(p.id)}} pathOptions={{color:p.measured?'#ffffff':'#aab4c0',weight:selected?.id===p.id?3:1.5,color:p.measured?colorFor(p.quality):'#8aa1ba',fillColor:colorFor(p.quality),fillOpacity:p.measured ? .95 : .45,dashArray:p.measured?undefined:'3 3'}}><Popup><b>{p.name}</b><br/>{p.quality} · {p.measured?'Actual measurement':'Sample/simulated'}<br/>Latency: {p.latency??'N/A'} ms<br/>Packet loss: {p.loss??'N/A'}%</Popup></CircleMarker>)}
+          <MapFocus selected={selected}/></MapContainer> : <div className="empty-state"><MapPinned size={30}/><b>No geolocated measurements yet</b><span>Run a Network Test and save it with GPS or latitude/longitude to populate this map.</span></div>}
+        <div className="functional-map-legend"><b>Coverage</b><span><i style={{background:'#2ed6a1'}}/>Good</span><span><i style={{background:'#ffbd4a'}}/>Moderate</span><span><i style={{background:'#ff5364'}}/>Poor / dead zone</span><span>Dashed pins = sample data</span></div></div>
+        <div className="map-footnote">{heatmapMetric==='signal'?'Interpolation: inverse-distance weighting of actual measured Wi-Fi RSSI only. Estimated or percentage-derived dBm values are excluded. Strong: ≥ −60 dBm; weak: −70 to −60 dBm; dead/poor: below −70 dBm.':'Interpolation: inverse-distance weighting of measured latency values only. Green ≤ 50 ms, yellow ≤ 100 ms, red > 100 ms. Cells are estimates, not direct observations.'} {heatmapSamples.length<3?`At least 3 measured ${heatmapMetric==='signal'?'RSSI':'latency'} points with coordinates are needed to render this heatmap.`:'Coverage estimates become less reliable far from measured points.'}</div>
+      </section>
+      <section className="panel selected-measurement"><div className="panel-title"><div><Signal size={15}/> Selected location</div></div>
+        {selected ? <><div className="detail-place"><span className="detail-pin" style={{color:colorFor(selected.quality)}}><MapPin size={20}/></span><div><h2>{selected.name}</h2><p>{selected.lat.toFixed(5)}, {selected.lng.toFixed(5)}</p></div></div><div className="selected-data-source"><i style={{background:selected.measured?'#2ed6a1':'#8aa1ba'}}/>{selected.measured?'Actual collected measurement':'Simulated/sample record'}</div><Badge quality={selected.quality==='Unknown'?'Moderate':selected.quality}/><div className="detail-metrics"><div><span>Signal strength</span><strong>{selected.signal!=null?`${selected.signal} dBm (measured)`:selected.signalQualityPct!=null?`${selected.signalQualityPct}% quality${selected.estimatedSignalDbm!=null?` · ~${selected.estimatedSignalDbm} dBm estimate`:''}`:'Not available'}</strong></div><div><span>Latency</span><strong>{selected.latency==null?'N/A':`${selected.latency} ms`}</strong></div><div><span>Packet loss</span><strong>{selected.loss==null?'N/A':`${selected.loss}%`}</strong></div><div><span>Download</span><strong>{selected.download==null?'N/A':`${selected.download} Mbps`}</strong></div><div><span>Upload</span><strong>{selected.upload==null?'N/A':`${selected.upload} Mbps`}</strong></div><div><span>Jitter</span><strong>{selected.jitter==null?'N/A':`${selected.jitter} ms`}</strong></div><div><span>Recorded</span><strong>{selected.timestamp?new Date(selected.timestamp).toLocaleString():'Unknown'}</strong></div></div><button className="nt-button muted full-width" onClick={()=>setSelectedId(selected.id)}>Keep selected point</button></> : <div className="empty-state"><MapPin size={24}/><b>Select a map marker</b><span>Location metrics will appear here.</span></div>}
+      </section>
+    </div>
+    {points.length===0&&<p className="functional-map-note">No points are fabricated for this map. Existing measurements without coordinates remain available in Test History but cannot be plotted.</p>}
   </div>;
 }
 const surveyInputStyle = { width:'100%', boxSizing:'border-box', padding:'10px 11px', borderRadius:8, border:'1px solid var(--border,#344054)', background:'var(--panel,#111827)', color:'inherit', outline:'none' };
+function WalkTest({ onSave, onNotice }) {
+  const [surveyName,setSurveyName] = useState('Walk-test survey');
+  const [locationPrefix,setLocationPrefix] = useState('Walk point');
+  const [intervalSeconds,setIntervalSeconds] = useState(5);
+  const [running,setRunning] = useState(false);
+  const [sampleCount,setSampleCount] = useState(0);
+  const [lastSample,setLastSample] = useState(null);
+  const [position,setPosition] = useState(null);
+  const [radio,setRadio] = useState(null);
+  const [status,setStatus] = useState('Start a survey to request GPS and connect to the optional native Wi-Fi collector.');
+  const [error,setError] = useState('');
+  const saveLockRef = useRef(false);
+  const timerRef = useRef(null); const watchRef = useRef(null); const positionRef = useRef(null); const runningRef = useRef(false); const indexRef = useRef(0); const sessionRef = useRef(null);
+  const getPosition = () => new Promise((resolve,reject) => {
+    if (!navigator.geolocation) return reject(new Error('Geolocation is not supported by this browser.'));
+    navigator.geolocation.getCurrentPosition(pos => { const v={lat:Number(pos.coords.latitude.toFixed(6)),lng:Number(pos.coords.longitude.toFixed(6)),accuracyMeters:Number.isFinite(pos.coords.accuracy)?Math.round(pos.coords.accuracy):null};positionRef.current=v;setPosition(v);resolve(v); }, e => reject(new Error(e.code===1?'Location permission denied. Allow location access to start a GPS walk-test.':e.code===2?'GPS position unavailable. Try outdoors or use manual point surveys.':'GPS request timed out.')), {enableHighAccuracy:true,timeout:12000,maximumAge:1000});
+  });
+  const stop = (message='Walk-test stopped.') => { runningRef.current=false;setRunning(false);if(timerRef.current){window.clearInterval(timerRef.current);timerRef.current=null;}if(watchRef.current!==null&&navigator.geolocation){navigator.geolocation.clearWatch(watchRef.current);watchRef.current=null;}setStatus(message); };
+  useEffect(()=>()=>{runningRef.current=false;if(timerRef.current)window.clearInterval(timerRef.current);if(watchRef.current!==null&&navigator.geolocation)navigator.geolocation.clearWatch(watchRef.current);},[]);
+  const collect = async () => {
+    if(!runningRef.current || saveLockRef.current)return;
+    saveLockRef.current=true;setError('');
+    try {
+      let pos=positionRef.current; if(!pos) pos=await getPosition();
+      let radioData=null; try { const rr=await fetch('http://127.0.0.1:8765/signal',{cache:'no-store',signal:AbortSignal.timeout(1800)}); if(rr.ok)radioData=await rr.json(); } catch {}
+      setRadio(radioData);
+      const started=performance.now(); let latencyMs=null; try { const ping=await apiFetch(`${API}/api/ping`,{cache:'no-store',signal:AbortSignal.timeout(3000)}); if(ping.ok){await ping.json();latencyMs=Number((performance.now()-started).toFixed(2));} } catch {}
+      indexRef.current+=1; const idx=indexRef.current;
+      const sample={surveyName:surveyName.trim()||'Walk-test survey',locationName:`${locationPrefix.trim()||'Walk point'} ${idx}`,lat:pos.lat,lng:pos.lng,accuracyMeters:pos.accuracyMeters,locationSource:'gps',locationPrecision:'precise',indoorSurvey:false,latencyMs,latency:latencyMs,signalDbm:Number.isFinite(radioData?.signalDbm)?radioData.signalDbm:null,signalQualityPct:Number.isFinite(radioData?.signalQualityPct)?radioData.signalQualityPct:null,estimatedSignalDbm:Number.isFinite(radioData?.estimatedSignalDbm)?radioData.estimatedSignalDbm:null,signalMethod:radioData?.method||'native-collector-unavailable',signalDbmIsEstimate:radioData?.signalDbmIsEstimate===true,connected:radioData?.connected!==false,gatewayReachable:true,internetReachable:latencyMs!==null,serverReachable:latencyMs!==null,packetLossPct:null,downloadMbps:null,uploadMbps:null,isMeasured:latencyMs!==null||Number.isFinite(radioData?.signalDbm)||Number.isFinite(radioData?.signalQualityPct),source:'walk-test-native-collector',walkSessionId:sessionRef.current,sampleIndex:idx,sampleCount:1,measurementError:radioData?String(radioData.note||''):'Native Wi-Fi collector unavailable; signal metrics not collected.'};
+      const saved=await onSave(sample); const view={...sample,...saved};setLastSample(view);setSampleCount(n=>n+1);setStatus(`Saved sample ${idx} at ${new Date().toLocaleTimeString()}.`);
+      if(!radioData) setError('Native collector not connected. GPS and backend response timing are saved, but Wi-Fi signal is unavailable. Start native-collector\start-collector.bat.');
+      else if(radioData.signalDbm==null) setError(radioData.note||'This operating system exposes signal quality rather than actual RSSI. The collector will not invent an actual dBm value.');
+    } catch(e){setError(e.message||'Could not collect a sample.');setStatus('Sample failed; survey remains active.');}
+    finally{saveLockRef.current=false;}
+  };
+  const start = async () => {
+    setError('');
+    try {
+      const pos=await getPosition(); sessionRef.current=(globalThis.crypto?.randomUUID?.()||`walk-${Date.now()}`);indexRef.current=0;setSampleCount(0);setLastSample(null);runningRef.current=true;setRunning(true);setStatus(`GPS acquired (${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}). Sampling every ${intervalSeconds} seconds.`);
+      if(navigator.geolocation) watchRef.current=navigator.geolocation.watchPosition(p=>{const v={lat:Number(p.coords.latitude.toFixed(6)),lng:Number(p.coords.longitude.toFixed(6)),accuracyMeters:Number.isFinite(p.coords.accuracy)?Math.round(p.coords.accuracy):null};positionRef.current=v;setPosition(v);},()=>{}, {enableHighAccuracy:true,maximumAge:1000,timeout:12000});
+      await collect(); timerRef.current=window.setInterval(()=>{if(runningRef.current)collect();},Math.max(3,Number(intervalSeconds)||5)*1000);
+    } catch(e){setError(e.message||'Could not start walk-test.');stop('Walk-test not started.');}
+  };
+  const signalValue=lastSample?.signalDbm!=null?`${lastSample.signalDbm} dBm`:lastSample?.estimatedSignalDbm!=null?`~${lastSample.estimatedSignalDbm} dBm (estimated)`:lastSample?.signalQualityPct!=null?`${lastSample.signalQualityPct}% quality`:'Not available';
+  return <div className="walk-test-screen"><div className="nt-page-header"><div><div className="eyebrow">CONTINUOUS FIELD SURVEY</div><h1>Walk-test Survey</h1><p>Record GPS-tagged samples while walking. Samples are saved to your authenticated measurement history.</p></div><span className={`connection-pill ${running?'online':'offline'}`}><i/>{running?'SURVEY RUNNING':'SURVEY STOPPED'}</span></div>
+    <section className="nt-speed-panel walk-panel"><div className="nt-section-heading"><h2><RadioTower size={17} style={{verticalAlign:'-3px'}}/> Survey setup</h2><span className="nt-live-state">GPS + native Wi-Fi collector</span></div>
+      <div className="walk-form-grid"><label>Survey name<input disabled={running} value={surveyName} onChange={e=>setSurveyName(e.target.value)} style={surveyInputStyle}/></label><label>Point label prefix<input disabled={running} value={locationPrefix} onChange={e=>setLocationPrefix(e.target.value)} style={surveyInputStyle}/></label><label>Sampling interval<select disabled={running} value={intervalSeconds} onChange={e=>setIntervalSeconds(Number(e.target.value))} style={surveyInputStyle}><option value={3}>Every 3 seconds</option><option value={5}>Every 5 seconds</option><option value={10}>Every 10 seconds</option><option value={15}>Every 15 seconds</option></select></label></div>
+      <div className="walk-actions">{!running?<button className="nt-button primary" onClick={start}><Play size={14}/> Start walk-test</button>:<button className="nt-button danger" onClick={()=>stop('Walk-test stopped by user.')}><X size={14}/> Stop survey</button>}<span className="walk-status"><i className={running?'walk-live-dot':''}/>{status}</span></div>
+      {error&&<div className="walk-warning"><AlertTriangle size={16}/><span>{error}</span></div>}
+      <div className="walk-metrics-grid"><div><small>SAVED SAMPLES</small><strong>{sampleCount}</strong></div><div><small>GPS POSITION</small><strong>{position?`${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`:'Waiting for GPS'}</strong><span>{position?.accuracyMeters!=null?`±${position.accuracyMeters} m accuracy`:''}</span></div><div><small>WI-FI SIGNAL</small><strong>{signalValue}</strong><span>{radio?.ssid?`Network: ${radio.ssid}`:radio?.method||'Collector not connected'}</span></div><div><small>BACKEND RESPONSE</small><strong>{lastSample?.latencyMs!=null?`${lastSample.latencyMs} ms`:'—'}</strong><span>Local API round-trip, not internet latency</span></div></div>
+      <div className="walk-collector-note"><strong>Native collector status:</strong> {radio?.available?'Connected':'Not connected'}. On Windows, the standard Wi-Fi interface usually exposes signal quality percentage, not actual RSSI; the collector reports that percentage and does not label a derived estimate as measured RSSI. Linux/macOS support actual RSSI where the native command exposes it.</div>
+    </section>
+    <section className="nt-speed-panel walk-panel"><div className="nt-section-heading"><h2><MapPinned size={17} style={{verticalAlign:'-3px'}}/> Latest walk-test sample</h2><span className="nt-live-state">Saved record</span></div>{lastSample?<div className="walk-last-sample"><b>{lastSample.locationName}</b><span>{lastSample.timestamp?new Date(lastSample.timestamp).toLocaleString():'Just saved'}</span><span>Coordinates: {lastSample.lat}, {lastSample.lng}</span><span>Signal: {signalValue}</span><span>Quality: {lastSample.quality||'Unclassified'}</span></div>:<div className="legacy-empty">No walk-test samples saved in this session yet.</div>}</section>
+  </div>;
+}
+
 function NetworkTest({ runTest, testing, result, apiOnline, progress, testStatus, testError }) {
   const [surveyName, setSurveyName] = useState('Campus survey');
   const [locationName, setLocationName] = useState('');
@@ -175,7 +380,7 @@ function NetworkTest({ runTest, testing, result, apiOnline, progress, testStatus
         <div className="nt-metric nt-upload"><span className="nt-label">Upload</span><div className="nt-number small-number">{upload===null?'—':upload.toFixed(2)}<small> Mbps</small></div><div className="nt-chart">{uploadSeries.length>1?<ResponsiveContainer width="100%" height="100%"><AreaChart data={uploadSeries} margin={{top:8,right:2,left:0,bottom:0}}><Area type="monotone" dataKey="value" stroke="#bd7acb" strokeWidth={2} fill="#b875c730" dot={false} isAnimationActive={!paused}/></AreaChart></ResponsiveContainer>:<span className="nt-empty-chart">Upload throughput appears after a successful test</span>}</div></div>
         <div className="nt-latency-stack"><div><span className="nt-label">Latency</span><strong>{latency===null?'—':latency.toFixed(2)}<small> ms</small></strong></div><div><span className="nt-label">Jitter</span><strong>{jitter===null?'—':jitter.toFixed(2)}<small> ms</small></strong></div><div><span className="nt-label">Packet loss</span><strong>{loss===null?'—':loss.toFixed(1)}<small>%</small></strong></div></div>
       </div>
-      <div className="nt-actions"><button className="nt-button muted" onClick={()=>setPaused(v=>!v)}><span>{paused?'▶':'Ⅱ'}</span>{paused?'Resume charts':'Pause charts'}</button><button className="nt-button primary" onClick={()=>{const loc=surveyLocation();if(loc)runTest(loc);}} disabled={testing||!apiOnline}><RefreshCw size={14} className={testing?'nt-spin':''}/>{testing?'Testing…':'Run / Retest'}</button><button className="nt-social download" title="Download PDF report" onClick={()=>window.open(`${API}/api/reports.pdf`,'_blank','noopener,noreferrer')}><Download size={14}/></button><span className="nt-measured"><Clock3 size={12}/> {result?`Measured at ${measuredAt}`:'No real measurement yet'}</span></div>
+      <div className="nt-actions"><button className="nt-button muted" onClick={()=>setPaused(v=>!v)}><span>{paused?'▶':'Ⅱ'}</span>{paused?'Resume charts':'Pause charts'}</button><button className="nt-button primary" onClick={()=>{const loc=surveyLocation();if(loc)runTest(loc);}} disabled={testing||!apiOnline}><RefreshCw size={14} className={testing?'nt-spin':''}/>{testing?'Testing…':'Run / Retest'}</button><button className="nt-social download" title="Download PDF report" onClick={()=>downloadApi('/api/reports.pdf').catch(e=>window.alert(e.message))}><Download size={14}/></button><span className="nt-measured"><Clock3 size={12}/> {result?`Measured at ${measuredAt}`:'No real measurement yet'}</span></div>
     </section>
     <div className="nt-lower-grid">
       <section className="nt-location-panel"><div className="nt-lower-title">Connection availability</div><div className="nt-location-details"><div><Router size={13}/><span>Backend: <b>{apiOnline?'Reachable':'Unavailable'}</b></span></div><div><Wifi size={13}/><span>Internet probes: <b>{result?.successfulProbes!=null?`${result.successfulProbes}/${result.probeCount} successful`:'Not tested'}</b></span></div><div><Signal size={13}/><span>Measurement source: <b>Browser HTTP probes</b></span></div><div><Activity size={13}/><span>Result: <b>{result?.issueType || result?.quality || 'Awaiting test'}</b></span></div></div></section>
@@ -183,85 +388,53 @@ function NetworkTest({ runTest, testing, result, apiOnline, progress, testStatus
     </div>
   </div>;
 }
-function History({ history, onClear }) {
-  const [range, setRange] = useState('24h');
-  const [aggregation, setAggregation] = useState('Mean');
-  const [alignment, setAlignment] = useState('Auto');
-  const [page, setPage] = useState({ latency: 0, jitter: 0, loss: 0 });
-  const series = [
-    { name: 'Confluence | HTTP', color: '#64b5f6', base: 158, amp: 3.5 },
-    { name: 'Confluence | ICMP', color: '#d6dce4', base: 151, amp: 2.3 },
-    { name: 'Google | HTTP', color: '#8edc85', base: 72, amp: 1.7 },
-    { name: 'Google | ICMP', color: '#f0a66a', base: 160, amp: 2.4 },
-    { name: 'Microsoft Office365 | HTTP', color: '#a8b9ff', base: 70, amp: 1.4 },
-    { name: 'Microsoft Office365 | ICMP', color: '#f16b8b', base: 32, amp: 1.1 },
-    { name: 'Microsoft Teams', color: '#d4c45c', base: 5, amp: 1.8 },
-  ];
-  const timeLabels = Array.from({ length: 25 }, (_, i) => {
-    const d = new Date(Date.now() - (24 - i) * 60 * 60 * 1000);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-  });
-  const jitterSeries = series.map((s, si) => ({ ...s, base: [38, 37, 16, 39, 18, 32, 2][si], amp: [1.8,1.2,1.3,2.1,0.8,1.2,2.8][si] }));
-  const lossSeries = series.map((s, si) => ({ ...s, base: si === 0 ? 0.15 : si === 1 ? 0.05 : si === 3 ? 0.25 : 0.02, amp: si === 4 ? 0.05 : 0.12 }));
-  const buildData = (set) => timeLabels.map((time, i) => {
-    const row = { time };
-    set.forEach((s, si) => {
-      const wobble = Math.sin(i * (0.7 + si * 0.11) + si) * s.amp + Math.cos(i * 0.37 + si) * s.amp * 0.4;
-      let value = Math.max(0, s.base + wobble);
-      if (set === jitterSeries && [12, 18, 21].includes(i) && si === 0) value += 12;
-      if (set === jitterSeries && i === 6 && si === 2) value += 9;
-      row[`s${si}`] = Number(value.toFixed(2));
+function History({ history, onClear, onDelete }) {
+  const [location, setLocation] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [quality, setQuality] = useState('All');
+  const [sortBy, setSortBy] = useState('date-desc');
+  const [selected, setSelected] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const rows = useMemo(() => {
+    const filtered=history.filter(r=>{
+      const stamp=r.timestamp||r.createdAt||'';
+      const date=stamp.slice(0,10);
+      const q=r.quality||'Unknown';
+      return (`${r.locationName||r.location||''} ${r.surveyName||''}`).toLowerCase().includes(location.toLowerCase()) &&
+        (!fromDate||date>=fromDate)&&(!toDate||date<=toDate)&&(quality==='All'||q===quality);
     });
-    return row;
-  });
-  const latencyData = buildData(series);
-  const jitterData = buildData(jitterSeries);
-  const lossData = buildData(lossSeries);
-  const exportCsv = () => {
-    const keys = ['id','createdAt','latency','status','message'];
-    const quote = v => `"${String(v ?? '').replaceAll('"','""')}"`;
-    const csv = [keys.join(','), ...history.map(x => keys.map(k => quote(x[k])).join(','))].join('\r\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    a.download = 'netspot-test-history.csv'; a.click(); URL.revokeObjectURL(a.href);
+    const val=(r,k)=>({latency:r.latencyMs??r.latency,jitter:r.jitterMs??r.jitter,loss:r.packetLossPct??r.loss,download:r.downloadMbps??r.download,upload:r.uploadMbps??r.upload,date:r.timestamp||r.createdAt||''}[k]);
+    return filtered.sort((a,b)=>{
+      if(sortBy==='date-desc')return String(b.timestamp||b.createdAt||'').localeCompare(String(a.timestamp||a.createdAt||''));
+      if(sortBy==='date-asc')return String(a.timestamp||a.createdAt||'').localeCompare(String(b.timestamp||b.createdAt||''));
+      const key=sortBy.split('-')[0], dir=sortBy.endsWith('-desc')?-1:1;
+      const av=Number(val(a,key)),bv=Number(val(b,key));
+      return (Number.isFinite(av)?av:Infinity)-(Number.isFinite(bv)?bv:Infinity) === 0 ? 0 : ((Number.isFinite(av)?av:Infinity)-(Number.isFinite(bv)?bv:Infinity))*dir;
+    });
+  },[history,location,fromDate,toDate,quality,sortBy]);
+  const exportCsv=()=>{
+    const keys=['id','timestamp','locationName','surveyName','lat','lng','signalDbm','latencyMs','jitterMs','packetLossPct','downloadMbps','uploadMbps','quality','isMeasured','measurementError'];
+    const quote=v=>`"${String(v??'').replaceAll('"','""')}"`;
+    const csv=[keys.join(','),...rows.map(r=>keys.map(k=>quote(r[k])).join(','))].join('\r\n');
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));a.download='netspot-test-history.csv';a.click();URL.revokeObjectURL(a.href);
   };
-  const graph = (title, kind, data, max, unit) => {
-    const key = kind;
-    const set = kind === 'latency' ? series : kind === 'jitter' ? jitterSeries : lossSeries;
-    const activePage = page[key] || 0;
-    return <section className={`history-graph history-${kind}`} key={kind}>
-      <div className="history-step"><span>{kind === 'latency' ? '2' : kind === 'jitter' ? '3' : '4'}</span></div>
-      <div className="history-graph-content">
-        <div className="history-graph-head"><h2>{title}</h2><button onClick={() => setPage(p => ({ ...p, [key]: (activePage + 1) % 3 }))} className="history-reset">{kind === 'latency' ? 'Reset All' : `${activePage + 1}/3  ▶`}</button></div>
-        <div className="history-chart-layout">
-          <div className="history-legend">{set.map((s, i) => <div key={s.name}><i style={{ background: s.color }}/><span>{s.name}</span></div>)}<button onClick={() => setPage(p => ({ ...p, [key]: (activePage + 1) % 3 }))}>◀  {activePage + 1}/3 ▶</button></div>
-          <div className="history-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data} margin={{ top: 12, right: 6, left: 0, bottom: 10 }}>
-                <CartesianGrid stroke="#4a5357" strokeDasharray="3 4" vertical={false}/>
-                <XAxis dataKey="time" interval={3} tick={{ fill: '#879196', fontSize: 9 }} axisLine={{ stroke: '#697277' }} tickLine={false}/>
-                <YAxis domain={[0, max]} ticks={kind === 'loss' ? [0,25,50,75,100] : kind === 'jitter' ? [0,10,20,30,40] : [0,50,100,150]} tickFormatter={v => `${v}${unit}`} tick={{ fill: '#879196', fontSize: 9 }} width={36} axisLine={false} tickLine={false}/>
-                <Tooltip contentStyle={{ background: '#f4f6f7', border: '1px solid #9ba4a8', color: '#17212a', fontSize: 10, borderRadius: 3 }} labelStyle={{ color: '#17212a' }} formatter={(v, n) => [`${Number(v).toFixed(2)}${unit}`, set.find((s,i)=>`s${i}`===n)?.name || n]}/>
-                {set.map((s, i) => <Line key={s.name} type="monotone" dataKey={`s${i}`} stroke={s.color} strokeWidth={1.35} dot={false} activeDot={{ r: 2.5 }} isAnimationActive={false}/>)}
-              </LineChart>
-            </ResponsiveContainer>
-            <div className="history-crosshair" aria-hidden="true"><span>{timeLabels[12]}<br/>{title} · {aggregation}</span></div>
-          </div>
-        </div>
-      </div>
-    </section>;
-  };
-  return <div className="history-monitor">
-    <div className="history-controls">
-      <div className="history-step"><span>1</span></div>
-      <label>Time Range<select value={range} onChange={e=>setRange(e.target.value)}><option value="24h">2022-10-02 09:00 to 2022-10-04 09:00</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select></label>
-      <label>Aggregation<select value={aggregation} onChange={e=>setAggregation(e.target.value)}><option>Mean</option><option>Maximum</option><option>Minimum</option><option>95th percentile</option></select></label>
-      <label>Alignment Period<select value={alignment} onChange={e=>setAlignment(e.target.value)}><option>Auto</option><option>1 minute</option><option>5 minutes</option><option>1 hour</option></select></label>
-      <div className="history-control-actions"><button onClick={exportCsv} title="Export test history">Export CSV</button><button onClick={onClear} disabled={!history.length} title="Clear saved test history">Clear</button></div>
+  const metric=(r,k,unit)=>{const v=r?.[k];return v===null||v===undefined||v===''||!Number.isFinite(Number(v))?'—':`${Number(v).toFixed(2)}${unit}`;};
+  const remove=async r=>{if(!r.id)return; if(!window.confirm(`Delete the test from ${new Date(r.timestamp||r.createdAt||Date.now()).toLocaleString()}? This cannot be undone.`))return;setBusyId(r.id);try{await onDelete(r.id);if(selected?.id===r.id)setSelected(null);}finally{setBusyId(null)}};
+  return <div className="history-functional">
+    <div className="nt-page-header"><div><div className="eyebrow">PERSISTENT MEASUREMENTS</div><h1>Test History</h1><p>Completed and failed network tests saved by the backend, retained across backend restarts.</p></div><div className="history-header-actions"><button className="nt-button muted" onClick={exportCsv}><Download size={14}/> Export filtered CSV</button><button className="nt-button danger" onClick={onClear}><Trash2 size={14}/> Clear all</button></div></div>
+    <div className="functional-map-filters history-filters">
+      <label className="map-search"><Search size={15}/><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Filter by location or survey"/></label>
+      <label><span>From</span><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}/></label>
+      <label><span>To</span><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)}/></label>
+      <label><Filter size={14}/><select value={quality} onChange={e=>setQuality(e.target.value)}><option>All</option>{['Good','Moderate','Poor','Dead Zone','Unstable','Outage','Connectivity Failure','Unknown'].map(q=><option key={q}>{q}</option>)}</select></label>
+      <label><span>Sort by</span><select value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="date-desc">Newest first</option><option value="date-asc">Oldest first</option><option value="latency-asc">Latency ↑</option><option value="latency-desc">Latency ↓</option><option value="download-desc">Download ↓</option><option value="upload-desc">Upload ↓</option><option value="loss-desc">Packet loss ↓</option></select></label>
+      <span className="map-result-count">{rows.length} of {history.length} tests</span>
     </div>
-    {graph('Latency','latency',latencyData,180,' ms')}
-    {graph('Jitter','jitter',jitterData,45,' ms')}
-    {graph('Loss','loss',lossData,100,'%')}
-    <div className="history-live-footer"><span><i/> Historical performance overview</span><span>{history.length} saved backend test{history.length===1?'':'s'} · plotted series are illustrative monitoring samples</span></div>
+    <section className="panel history-table-panel"><div className="panel-title"><div><Clock3 size={15}/> Saved test records</div><span className="map-count">Persistent backend storage</span></div>
+      {rows.length ? <div className="table-wrap"><table className="history-functional-table"><thead><tr><th>Date &amp; time</th><th>Location</th><th>Latency</th><th>Jitter</th><th>Packet loss</th><th>Download</th><th>Upload</th><th>Quality</th><th>Source / status</th><th>Actions</th></tr></thead><tbody>{rows.map(r=>{const stamp=r.timestamp||r.createdAt;const failed=Number(r.successfulProbes??1)===0||Boolean(r.measurementError&&r.latencyMs==null);return <tr key={r.id||stamp}><td>{stamp?new Date(stamp).toLocaleString():'Time unavailable'}</td><td><b>{r.locationName||r.location||'Location not shared'}</b><small>{r.surveyName||'Network survey'}{Number.isFinite(Number(r.lat))&&Number.isFinite(Number(r.lng))?` · ${Number(r.lat).toFixed(4)}, ${Number(r.lng).toFixed(4)}`:''}</small></td><td>{metric({...r,latencyMs:r.latencyMs??r.latency},'latencyMs',' ms')}</td><td>{metric(r,'jitterMs',' ms')}</td><td>{metric({...r,packetLossPct:r.packetLossPct??r.loss},'packetLossPct','%')}</td><td>{metric({...r,downloadMbps:r.downloadMbps??r.download},'downloadMbps',' Mbps')}</td><td>{metric({...r,uploadMbps:r.uploadMbps??r.upload},'uploadMbps',' Mbps')}</td><td><Badge quality={r.quality||'Unknown'}/></td><td><span className={`history-status ${failed?'failed':'saved'}`}>{failed?'Failed / partial':r.isMeasured===false?'Sample data':'Saved measurement'}</span></td><td><div className="history-row-actions"><button className="text-button" onClick={()=>setSelected(r)}>Details</button><button className="text-button history-delete" disabled={busyId===r.id} onClick={()=>remove(r)} title="Delete this test"><Trash2 size={14}/></button></div></td></tr>})}</tbody></table></div> : <div className="empty-state history-empty"><Clock3 size={28}/><b>{history.length?'No tests match these filters':'No saved test history yet'}</b><span>{history.length?'Try changing the location, date range or quality filter.':'Run a Network Test to save the first record. Failed or partial tests are also shown when the backend can save them.'}</span></div>}
+    </section>
+    {selected&&<div className="history-modal-backdrop" role="presentation" onClick={e=>{if(e.target===e.currentTarget)setSelected(null)}}><section className="history-detail-modal" role="dialog" aria-modal="true" aria-label="Test details"><div className="panel-title"><div><Activity size={16}/> Test details</div><button className="icon-button" onClick={()=>setSelected(null)}><X size={15}/></button></div><div className="history-detail-body"><h2>{selected.locationName||selected.location||'Location not shared'}</h2><p>{selected.timestamp||selected.createdAt?new Date(selected.timestamp||selected.createdAt).toLocaleString():'Timestamp unavailable'} · {selected.surveyName||'Network survey'}</p><Badge quality={selected.quality||'Unknown'}/><div className="history-detail-grid">{[['Signal strength',metric(selected,'signalDbm',' dBm')],['Latency',metric({...selected,latencyMs:selected.latencyMs??selected.latency},'latencyMs',' ms')],['Jitter',metric({...selected,jitterMs:selected.jitterMs??selected.jitter},'jitterMs',' ms')],['Packet loss',metric({...selected,packetLossPct:selected.packetLossPct??selected.loss},'packetLossPct','%')],['Download',metric({...selected,downloadMbps:selected.downloadMbps??selected.download},'downloadMbps',' Mbps')],['Upload',metric({...selected,uploadMbps:selected.uploadMbps??selected.upload},'uploadMbps',' Mbps')],['Coordinates',Number.isFinite(Number(selected.lat))&&Number.isFinite(Number(selected.lng))?`${selected.lat}, ${selected.lng}`:'Not recorded'],['Data source',selected.isMeasured===false?'Simulated/sample':'Measured / browser probe']].map(([label,value])=><div key={label}><span>{label}</span><b>{value}</b></div>)}</div>{selected.measurementError&&<div className="history-error-detail"><AlertTriangle size={15}/><span>{selected.measurementError}</span></div>}<button className="nt-button primary full-width" onClick={()=>setSelected(null)}>Close details</button></div></section></div>}
   </div>;
 }
 function Reports({ history, locations }) {
@@ -269,62 +442,52 @@ function Reports({ history, locations }) {
   const [locationFilter, setLocationFilter] = useState('All Locations');
   const [qualityFilter, setQualityFilter] = useState('All Quality');
   const [reportSearch, setReportSearch] = useState('');
+  const [analytics, setAnalytics] = useState(null);
+  const [trendRecords, setTrendRecords] = useState([]);
+  const [locationAnalytics, setLocationAnalytics] = useState([]);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState('');
+  useEffect(() => {
+    let active = true;
+    const params = new URLSearchParams();
+    if (range === 'Last 24 hours') params.set('from', new Date(Date.now()-86400000).toISOString());
+    else if (range === 'Last 7 days') params.set('from', new Date(Date.now()-7*86400000).toISOString());
+    else if (range === 'Last 30 days') params.set('from', new Date(Date.now()-30*86400000).toISOString());
+    if (locationFilter !== 'All Locations') params.set('location', locationFilter);
+    if (qualityFilter !== 'All Quality') params.set('quality', qualityFilter);
+    const qs = params.toString();
+    setReportLoading(true); setReportError('');
+    Promise.all([apiFetch(`${API}/api/reports/summary?${qs}`), apiFetch(`${API}/api/reports/trends?${qs}`), apiFetch(`${API}/api/reports/locations?${qs}`)])
+      .then(async responses => { if (responses.some(r=>!r.ok)) throw new Error('Could not load analytics from the backend.'); return Promise.all(responses.map(r=>r.json())); })
+      .then(([summary, trends, locs]) => { if (!active) return; setAnalytics(summary.data || null); setTrendRecords(trends.data || []); setLocationAnalytics(locs.data || []); })
+      .catch(e => { if (active) { setReportError(e.message); setAnalytics(null); setTrendRecords([]); setLocationAnalytics([]); } })
+      .finally(() => { if (active) setReportLoading(false); });
+    return () => { active = false; };
+  }, [range, locationFilter, qualityFilter]);
 
-  const demoTrend = [
-    { day: 'Oct 20', latency: 45, download: 76, upload: 27, loss: 5 },
-    { day: 'Oct 21', latency: 54, download: 90, upload: 33, loss: 11 },
-    { day: 'Oct 22', latency: 59, download: 94, upload: 37, loss: 12 },
-    { day: 'Oct 23', latency: 52, download: 89, upload: 41, loss: 14 },
-    { day: 'Oct 24', latency: 61, download: 100, upload: 38, loss: 13 },
-    { day: 'Oct 25', latency: 56, download: 86, upload: 34, loss: 18 },
-    { day: 'Oct 26', latency: 56, download: 94, upload: 37, loss: 15 },
-  ];
-  const displayTrend = history.length >= 2
-    ? [...history].slice(0, 7).reverse().map((item, i) => ({
-        day: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) : `Test ${i + 1}`,
-        latency: Number(item.latency || 0),
-        download: Math.max(12, 119 - Number(item.latency || 0) * .38),
-        upload: Math.max(8, 80 - Number(item.latency || 0) * .28),
-        loss: Number(item.loss || 0),
-      })) : demoTrend;
-  const displayLocations = locations.map((l, i) => ({
-    ...l,
-    reportName: ({ 'Main Library': 'Library', 'College Canteen': 'Canteen', 'Sports Ground': 'Sports Complex', 'Computer Lab 3': 'Hostel Block B', 'Parking Area': 'Hostel Block A', 'Hostel Entrance': 'Lab', 'Auditorium': 'Auditorium' })[l.name] || l.name,
-    download: Math.max(18, Math.round(122 - Number(l.latency || 40) * .38)),
-    upload: Math.max(10, Math.round(72 - Number(l.latency || 40) * .25)),
-  }));
-  const avgLatency = history.length
-    ? Math.round(history.reduce((sum, item) => sum + Number(item.latency || 0), 0) / history.length)
-    : 42;
-  const totalTests = history.length || 248;
-  const poorCount = locations.filter(l => l.quality === 'Poor').length || 7;
+  const displayTrend = trendRecords.map(item => ({ day: item.date ? new Date(`${item.date}T00:00:00`).toLocaleDateString('en-US',{month:'short',day:'2-digit'}) : 'Unknown', latency: item.latencyMs, jitter: item.jitterMs, download: item.downloadMbps, upload: item.uploadMbps, loss: item.packetLossPct, count: item.count }));
+  const displayLocations = locationAnalytics.map(l => ({ name:l.location, reportName:l.location, latency:l.averageLatencyMs, jitter:l.averageJitterMs, loss:l.averagePacketLossPct, download:l.averageDownloadMbps, upload:l.averageUploadMbps, quality:l.consistentlyPoor?'Poor':(l.poorSharePct>0?'Moderate':'Good'), count:l.totalTests, poorSharePct:l.poorSharePct, consistentlyPoor:l.consistentlyPoor }));
+  const avgLatency = analytics?.averageLatencyMs;
+  const totalTests = analytics?.totalTests ?? 0;
+  const poorCount = displayLocations.filter(l => l.consistentlyPoor).length;
   const visibleLocations = displayLocations.filter(l =>
     (locationFilter === 'All Locations' || l.reportName === locationFilter || l.name === locationFilter) &&
     (qualityFilter === 'All Quality' || l.quality === qualityFilter) &&
     l.reportName.toLowerCase().includes(reportSearch.toLowerCase())
   );
-  const recentRows = (history.length ? history.slice(0, 5).map((item, i) => {
-    const loc = displayLocations[i % Math.max(displayLocations.length, 1)];
-    return { id: item.id || i, date: item.createdAt ? new Date(item.createdAt) : new Date(), location: loc?.reportName || 'Library', latency: Number(item.latency || 0), download: loc?.download || 92, upload: loc?.upload || 48, quality: Number(item.latency || 0) > 100 ? 'Poor' : Number(item.latency || 0) > 55 ? 'Moderate' : 'Good' };
-  }) : [
-    { id: 1, date: new Date('2026-10-26T14:32:00'), location: 'Library', latency: 28, download: 92, upload: 48, quality: 'Good' },
-    { id: 2, date: new Date('2026-10-26T12:17:00'), location: 'Hostel Block B', latency: 78, download: 42, upload: 18, quality: 'Poor' },
-    { id: 3, date: new Date('2026-10-26T11:03:00'), location: 'Lab', latency: 34, download: 88, upload: 46, quality: 'Good' },
-    { id: 4, date: new Date('2026-10-25T16:45:00'), location: 'Canteen', latency: 49, download: 60, upload: 32, quality: 'Moderate' },
-    { id: 5, date: new Date('2026-10-25T10:20:00'), location: 'Sports Complex', latency: 23, download: 95, upload: 52, quality: 'Good' },
-  ]).filter(row => (locationFilter === 'All Locations' || row.location === locationFilter) && (qualityFilter === 'All Quality' || row.quality === qualityFilter));
+  const recentRows = history.filter(item => (locationFilter === 'All Locations' || String(item.locationName||'').toLowerCase().includes(locationFilter.toLowerCase())) && (qualityFilter === 'All Quality' || item.quality === qualityFilter)).slice(0,5).map(item => ({ id:item.id, date:item.createdAt ? new Date(item.createdAt) : new Date(item.timestamp), location:item.locationName||'Location not shared', latency:item.latency, download:item.downloadMbps, upload:item.uploadMbps, quality:item.quality||'Unknown', jitter:item.jitterMs, loss:item.loss, isMeasured:item.isMeasured }));
 
   const exportReport = () => {
-    // The report endpoint returns a real PDFKit-generated A4 PDF with attachment headers.
-    window.open(`${API}/api/reports.pdf`, '_blank', 'noopener,noreferrer');
+    const params = new URLSearchParams();
+    if (range !== 'All time') params.set('from', new Date(Date.now()-(range==='Last 24 hours'?86400000:range==='Last 7 days'?7:30)*86400000).toISOString());
+    if (locationFilter !== 'All Locations') params.set('location', locationFilter);
+    if (qualityFilter !== 'All Quality') params.set('quality', qualityFilter);
+    downloadApi(`/api/reports.pdf?${params.toString()}`).catch(e=>window.alert(e.message));
   };
+  const exportCsv = () => { const params = new URLSearchParams(); if (range !== 'All time') params.set('from', new Date(Date.now()-(range==='Last 24 hours'?86400000:range==='Last 7 days'?7:30)*86400000).toISOString()); if(locationFilter!=='All Locations')params.set('location',locationFilter); if(qualityFilter!=='All Quality')params.set('quality',qualityFilter); downloadApi(`/api/reports.csv?${params.toString()}`).catch(e=>window.alert(e.message)); };
 
   const qualityClass = q => q.toLowerCase().replace(/\s+/g, '-');
-  const mapDots = [
-    { x: 35, y: 25, name: 'Library', q: 'Good' }, { x: 19, y: 44, name: 'Hostel Block A', q: 'Moderate' },
-    { x: 68, y: 36, name: 'Hostel Block B', q: 'Poor' }, { x: 54, y: 55, name: 'Lab', q: 'Good' },
-    { x: 43, y: 72, name: 'Canteen', q: 'Moderate' }, { x: 76, y: 82, name: 'Sports Complex', q: 'Good' },
-  ];
+  const mapDots = []; // Location map visualization is intentionally empty until measured locations are available.
 
   return <div className="reports-v2">
     <div className="reports-v2-heading">
@@ -333,20 +496,22 @@ function Reports({ history, locations }) {
         <label><CalendarDays size={15}/><select value={range} onChange={e => setRange(e.target.value)} aria-label="Date range"><option>Last 7 days</option><option>Last 24 hours</option><option>Last 30 days</option><option>All time</option></select><ChevronDown size={14}/></label>
         <label><MapPin size={15}/><select value={locationFilter} onChange={e => setLocationFilter(e.target.value)} aria-label="Location filter"><option>All Locations</option>{[...new Set(displayLocations.map(l => l.reportName))].map(name => <option key={name}>{name}</option>)}</select><ChevronDown size={14}/></label>
         <label><Filter size={15}/><select value={qualityFilter} onChange={e => setQualityFilter(e.target.value)} aria-label="Quality filter"><option>All Quality</option><option>Good</option><option>Moderate</option><option>Poor</option></select><ChevronDown size={14}/></label>
-        <button className="reports-export" onClick={exportReport}><Download size={15}/> Export Report</button>
+        <button className="reports-export" onClick={exportCsv}><Download size={15}/> Export CSV</button><button className="reports-export" onClick={exportReport}><FileChartColumn size={15}/> Export PDF</button>
       </div>
     </div>
 
+    {reportError && <div className="reports-empty-state">Analytics unavailable: {reportError}</div>}
+    {!reportLoading && !reportError && totalTests===0 && <div className="reports-empty-state">No saved measurements match these filters. Run a network test or change the date, location or quality filters. Simulated and missing measurements are not invented to fill charts.</div>}
     <div className="reports-v2-stats">
-      <article className="reports-stat"><span className="reports-stat-icon cyan"><Activity size={26}/></span><div><small>TOTAL TESTS</small><strong>{totalTests}</strong><p className="positive">↑ 12% <span>vs. previous 7 days</span></p></div></article>
-      <article className="reports-stat"><span className="reports-stat-icon blue"><Gauge size={27}/></span><div><small>AVG. LATENCY</small><strong>{history.length ? avgLatency : 42}<em> ms</em></strong><p className="positive">↓ 18% <span>vs. previous 7 days</span></p></div></article>
-      <article className="reports-stat"><span className="reports-stat-icon green"><ArrowDownToLine size={27}/></span><div><small>AVG. DOWNLOAD SPEED</small><strong>{history.length ? Math.round(displayLocations.reduce((a,l)=>a+l.download,0)/Math.max(displayLocations.length,1)) : 86}<em> Mbps</em></strong><p className="positive">↑ 24% <span>vs. previous 7 days</span></p></div></article>
-      <article className="reports-stat"><span className="reports-stat-icon red"><MapPin size={27}/></span><div><small>POOR LOCATIONS</small><strong>{poorCount}</strong><p className="negative">↑ 2 <span>vs. previous 7 days</span></p></div></article>
+      <article className="reports-stat"><span className="reports-stat-icon cyan"><Activity size={26}/></span><div><small>TOTAL TESTS</small><strong>{totalTests}</strong><p>{reportLoading ? 'Updating…' : (analytics?.dataQuality || 'No saved records')}</p></div></article>
+      <article className="reports-stat"><span className="reports-stat-icon blue"><Gauge size={27}/></span><div><small>AVG. LATENCY</small><strong>{avgLatency ?? '—'}<em> ms</em></strong><p>From saved measurements</p></div></article>
+      <article className="reports-stat"><span className="reports-stat-icon green"><ArrowDownToLine size={27}/></span><div><small>AVG. DOWNLOAD SPEED</small><strong>{analytics?.averageDownloadMbps ?? '—'}<em> Mbps</em></strong><p>From saved measurements</p></div></article>
+      <article className="reports-stat"><span className="reports-stat-icon red"><MapPin size={27}/></span><div><small>POOR LOCATIONS</small><strong>{poorCount}</strong><p>Locations with repeated poor results</p></div></article>
     </div>
 
     <div className="reports-v2-grid reports-top-grid">
       <section className="reports-card reports-trend-card"><div className="reports-card-head"><h2><Activity size={19}/>Performance Trends</h2><div className="reports-legend"><span><i className="dot-cyan"/>Latency (ms)</span><span><i className="dot-green"/>Download (Mbps)</span><span><i className="dot-purple"/>Upload (Mbps)</span><span><i className="dot-amber"/>Packet Loss (%)</span></div></div>
-        <div className="reports-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={displayTrend} margin={{ top: 12, right: 10, left: -8, bottom: 0 }}><CartesianGrid stroke="#12314a" strokeDasharray="2 4" vertical={false}/><XAxis dataKey="day" tick={{ fill:'#a5c6df', fontSize:11 }} axisLine={{stroke:'#1b4562'}} tickLine={false}/><YAxis domain={[0,120]} ticks={[0,20,40,60,80,100,120]} tick={{fill:'#a5c6df',fontSize:11}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{background:'#061c31',border:'1px solid #145071',borderRadius:8,color:'#e9f7ff'}}/><Line type="monotone" dataKey="latency" name="Latency (ms)" stroke="#00d8f5" strokeWidth={2} dot={{r:3,fill:'#00d8f5'}}/><Line type="monotone" dataKey="download" name="Download (Mbps)" stroke="#00e6a0" strokeWidth={2} dot={{r:3,fill:'#00e6a0'}}/><Line type="monotone" dataKey="upload" name="Upload (Mbps)" stroke="#b05cff" strokeWidth={2} dot={{r:3,fill:'#b05cff'}}/><Line type="monotone" dataKey="loss" name="Packet Loss (%)" stroke="#ffb21d" strokeWidth={2} dot={{r:3,fill:'#ffb21d'}}/></LineChart></ResponsiveContainer></div>
+        <div className="reports-chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={displayTrend} margin={{ top: 12, right: 10, left: -8, bottom: 0 }}><CartesianGrid stroke="#12314a" strokeDasharray="2 4" vertical={false}/><XAxis dataKey="day" tick={{ fill:'#a5c6df', fontSize:11 }} axisLine={{stroke:'#1b4562'}} tickLine={false}/><YAxis domain={[0,120]} ticks={[0,20,40,60,80,100,120]} tick={{fill:'#a5c6df',fontSize:11}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{background:'#061c31',border:'1px solid #145071',borderRadius:8,color:'#e9f7ff'}}/><Line type="monotone" dataKey="jitter" name="Jitter (ms)" stroke="#ff6384" strokeWidth={2} dot={{r:2}} connectNulls={false}/><Line type="monotone" dataKey="latency" name="Latency (ms)" stroke="#00d8f5" strokeWidth={2} dot={{r:3,fill:'#00d8f5'}}/><Line type="monotone" dataKey="download" name="Download (Mbps)" stroke="#00e6a0" strokeWidth={2} dot={{r:3,fill:'#00e6a0'}}/><Line type="monotone" dataKey="upload" name="Upload (Mbps)" stroke="#b05cff" strokeWidth={2} dot={{r:3,fill:'#b05cff'}}/><Line type="monotone" dataKey="loss" name="Packet Loss (%)" stroke="#ffb21d" strokeWidth={2} dot={{r:3,fill:'#ffb21d'}}/></LineChart></ResponsiveContainer></div>
       </section>
       <section className="reports-card"><div className="reports-card-head"><h2><MapPin size={19}/>Location Comparison</h2><div className="reports-legend"><span><i className="dot-cyan"/>Latency (ms)</span><span><i className="dot-green"/>Download (Mbps)</span></div></div>
         <div className="reports-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={displayLocations.slice(0,6).map(l=>({...l, shortName:l.reportName.length>13?l.reportName.slice(0,12)+'…':l.reportName}))} margin={{top:14,right:8,left:-8,bottom:0}}><CartesianGrid stroke="#12314a" strokeDasharray="2 4" vertical={false}/><XAxis dataKey="shortName" tick={{fill:'#00dafa',fontSize:10}} axisLine={{stroke:'#1b4562'}} tickLine={false}/><YAxis domain={[0,120]} ticks={[0,30,60,90,120]} tick={{fill:'#a5c6df',fontSize:10}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{background:'#061c31',border:'1px solid #145071',borderRadius:8,color:'#e9f7ff'}}/><Bar dataKey="latency" name="Latency (ms)" fill="#05c8e9" radius={[3,3,0,0]} maxBarSize={24}/><Bar dataKey="download" name="Download (Mbps)" fill="#13ce91" radius={[3,3,0,0]} maxBarSize={24}/></BarChart></ResponsiveContainer></div>
@@ -356,75 +521,101 @@ function Reports({ history, locations }) {
     <div className="reports-v2-grid reports-bottom-grid">
       <section className="reports-card reports-quality-card"><div className="reports-card-head"><h2><Activity size={19}/>Network Quality by Location</h2></div><div className="reports-quality-content">
         <div className="reports-mini-map"><div className="map-road road-a"/><div className="map-road road-b"/><div className="map-road road-c"/><div className="map-road road-d"/>{mapDots.map(dot=><div key={dot.name} className={`reports-map-dot ${qualityClass(dot.q)}`} style={{left:`${dot.x}%`,top:`${dot.y}%`}} title={`${dot.name} · ${dot.q}`}><span>{dot.name}</span></div>)}<div className="map-zoom"><button aria-label="Zoom in">+</button><button aria-label="Zoom out">−</button></div><span className="map-target"><MapPin size={16}/></span></div>
-        <div className="reports-quality-table"><div className="quality-key"><span><i className="dot-green"/>Good</span><span><i className="dot-amber"/>Moderate</span><span><i className="dot-red"/>Poor</span></div><div className="quality-table-head"><span>Location</span><span>Avg. Latency</span><span>Quality</span></div>{visibleLocations.slice(0,6).map(l=><div className="quality-table-row" key={l.id}><span>{l.reportName}</span><span>{l.latency} ms</span><span><b className={`quality-tag ${qualityClass(l.quality)}`}>{l.quality}</b></span></div>)}</div>
+        <div className="reports-quality-table"><div className="quality-key"><span><i className="dot-green"/>Good</span><span><i className="dot-amber"/>Moderate</span><span><i className="dot-red"/>Poor</span></div><div className="quality-table-head"><span>Location</span><span>Avg. Latency</span><span>Quality</span></div>{visibleLocations.slice(0,6).map(l=><div className="quality-table-row" key={l.id}><span>{l.reportName}</span><span>{l.latency ?? 'N/A'} ms</span><span><b className={`quality-tag ${qualityClass(l.quality)}`}>{l.quality}</b></span></div>)}</div>
       </div></section>
       <section className="reports-card reports-recent-card"><div className="reports-card-head"><h2><Clock3 size={19}/>Recent Test Reports</h2><button className="reports-view-all" onClick={()=>setRange('All time')}>View All</button></div>
-        <div className="reports-table-wrap"><table className="reports-recent-table"><thead><tr><th>Date &amp; Time</th><th>Location</th><th>Latency</th><th>Download</th><th>Upload</th><th>Quality</th><th/></tr></thead><tbody>{recentRows.map(row=><tr key={row.id}><td>{row.date.toLocaleDateString('en-US',{month:'short',day:'2-digit',year:'numeric'})} {row.date.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false})}</td><td>{row.location}</td><td>{row.latency} ms</td><td>{row.download} Mbps</td><td>{row.upload} Mbps</td><td><b className={`quality-tag ${qualityClass(row.quality)}`}>{row.quality}</b></td><td><ChevronDown className="row-chevron" size={14}/></td></tr>)}</tbody></table></div>
-        <div className="reports-table-foot"><span>{history.length ? `Showing ${recentRows.length} saved test records` : 'Demo preview · values are illustrative'}</span><input value={reportSearch} onChange={e=>setReportSearch(e.target.value)} placeholder="Filter locations…" aria-label="Filter locations"/></div>
+        <div className="reports-table-wrap"><table className="reports-recent-table"><thead><tr><th>Date &amp; Time</th><th>Location</th><th>Latency</th><th>Download</th><th>Upload</th><th>Quality</th><th/></tr></thead><tbody>{recentRows.map(row=><tr key={row.id}><td>{row.date.toLocaleDateString('en-US',{month:'short',day:'2-digit',year:'numeric'})} {row.date.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false})}</td><td>{row.location}</td><td>{row.latency ?? 'N/A'} ms</td><td>{row.download ?? 'N/A'} Mbps</td><td>{row.upload ?? 'N/A'} Mbps</td><td><b className={`quality-tag ${qualityClass(row.quality)}`}>{row.quality}</b></td><td><ChevronDown className="row-chevron" size={14}/></td></tr>)}</tbody></table></div>
+        <div className="reports-table-foot"><span>{`Showing ${recentRows.length} saved test records`}</span><input value={reportSearch} onChange={e=>setReportSearch(e.target.value)} placeholder="Filter locations…" aria-label="Filter locations"/></div>
       </section>
     </div>
     <div className="reports-v2-note">Note: Data shown is based on actual tests and backend records. For demonstration purposes, some values may be simulated.</div>
   </div>;
 }
 function LoginPage({ onLogin, theme, onToggleTheme }) {
-  const [mode, setMode] = useState('login');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const switchMode = (next) => { setMode(next); setError(''); setNotice(''); };
-  const submit = (event) => {
-    event.preventDefault();
-    setError(''); setNotice('');
+  const [mode, setMode] = useState('login'); const [name, setName] = useState(''); const [email, setEmail] = useState('');
+  const [password, setPassword] = useState(''); const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
+  const switchMode = next => { setMode(next); setError(''); setNotice(''); };
+  const submit = async event => {
+    event.preventDefault(); setError(''); setNotice('');
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail || !password) { setError('Enter your email and password.'); return; }
-    // Prototype-only local account storage. Do not use this for real or sensitive accounts.
-    let users = [];
-    try { users = JSON.parse(localStorage.getItem('netspot-demo-users') || '[]'); } catch { users = []; }
-    if (mode === 'register') {
-      if (!name.trim()) { setError('Enter your name.'); return; }
-      if (password.length < 6) { setError('Use a password with at least 6 characters.'); return; }
-      if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
-      if (users.some(user => user.email === normalizedEmail)) { setError('An account with this email already exists. Please sign in.'); return; }
-      users.push({ name: name.trim(), email: normalizedEmail, password });
-      localStorage.setItem('netspot-demo-users', JSON.stringify(users));
-      setNotice('Account created. You can now sign in.');
-      setMode('login'); setPassword(''); setConfirmPassword('');
-      return;
-    }
-    const user = users.find(item => item.email === normalizedEmail && item.password === password);
-    if (user) { onLogin(user.email, user.name); return; }
-    setError(users.length ? 'Email or password is incorrect. Create an account if you are new.' : 'No account found yet. Choose Create account first.');
+    if (mode === 'register' && !name.trim()) { setError('Enter your name.'); return; }
+    if (mode === 'register' && password.length < 10) { setError('Use a password with at least 10 characters.'); return; }
+    if (mode === 'register' && password !== confirmPassword) { setError('Passwords do not match.'); return; }
+    setBusy(true);
+    try {
+      const response = await fetch(`${API}/api/auth/${mode}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(mode === 'register' ? {name:name.trim(),email:normalizedEmail,password} : {email:normalizedEmail,password}), cache:'no-store' });
+      const body = await response.json().catch(()=>({}));
+      if (!response.ok) throw new Error(body.message || `Authentication failed (${response.status})`);
+      if (mode === 'register') { setNotice('Account created securely. You are now signed in.'); onLogin(body.user, body.token); }
+      else onLogin(body.user, body.token);
+    } catch (e) { setError(e.message || 'Could not connect to the authentication server.'); }
+    finally { setBusy(false); }
   };
   return <div className={`login-screen ${theme === 'light' ? 'light-mode' : ''}`}>
     <div className="login-theme"><button className="icon-button" onClick={onToggleTheme} aria-label="Toggle color theme">{theme === 'dark' ? <Sun size={17}/> : <Moon size={17}/>}</button></div>
     <form className="login-card" onSubmit={submit}>
-      <div className="login-brand-mark"><Wifi size={27}/></div>
-      <div className="eyebrow centered">NETWORK OPERATIONS CENTER</div>
+      <div className="login-brand-mark"><Wifi size={27}/></div><div className="eyebrow centered">NETWORK OPERATIONS CENTER</div>
       <h1>{mode === 'login' ? 'Welcome to NetSpot' : 'Create your account'}</h1>
       <p>{mode === 'login' ? 'Sign in to your network intelligence workspace.' : 'Register to start monitoring network performance.'}</p>
-      {mode === 'register' && <label>Full name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" autoComplete="name" required /></label>}
-      <label>Email address<input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required /></label>
-      <label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode === 'register' ? 'At least 6 characters' : 'Enter password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={mode === 'register' ? 6 : undefined} required /></label>
+      {mode === 'register' && <label>Full name<input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name" autoComplete="name" maxLength={100} required /></label>}
+      <label>Email address<input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" maxLength={254} required /></label>
+      <label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode === 'register' ? 'At least 10 characters' : 'Enter password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={mode === 'register' ? 10 : undefined} maxLength={128} required /></label>
       {mode === 'register' && <label>Confirm password<input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Re-enter password" autoComplete="new-password" required /></label>}
-      {error && <div className="login-error" role="alert">{error}</div>}
-      {notice && <div className="login-notice" role="status">{notice}</div>}
-      <button className="primary-button login-submit" type="submit"><LogIn size={16}/>{mode === 'login' ? 'Sign in' : 'Create account'}</button>
+      {error && <div className="login-error" role="alert">{error}</div>}{notice && <div className="login-notice" role="status">{notice}</div>}
+      <button className="primary-button login-submit" type="submit" disabled={busy}><LogIn size={16}/>{busy?'Please wait…':mode === 'login' ? 'Sign in' : 'Create account'}</button>
       <div className="login-switch">{mode === 'login' ? "Don't have an account?" : 'Already registered?'} <button type="button" onClick={()=>switchMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Create account' : 'Sign in'}</button></div>
-      <small className="login-disclaimer">Demo authentication stores accounts in this browser only. Do not use a real password; secure backend authentication is required before deployment.</small>
+      <small className="login-disclaimer">Accounts are stored by the backend. Passwords are securely hashed; sessions expire after 8 hours.</small>
     </form>
   </div>;
 }
 
-export default function App() {
-  const [activePage,setActivePage]=useState('Dashboard'); const [history,setHistory]=useState([]); const [theme,setTheme]=useState(()=>localStorage.getItem('netspot-theme') || 'dark'); const [signedInAs,setSignedInAs]=useState(''); const [apiOnline,setApiOnline]=useState(false); const [testing,setTesting]=useState(false); const [result,setResult]=useState(null); const [toast,setToast]=useState(''); const [sidebarOpen,setSidebarOpen]=useState(false); const [progress,setProgress]=useState(0); const [testStatus,setTestStatus]=useState(''); const [testError,setTestError]=useState('');
-  const locations=seedLocations;
+export default 
+function PassiveMonitor() {
+  const [running,setRunning]=useState(false);
+  const [samples,setSamples]=useState([]);
+  const [intervalSec,setIntervalSec]=useState(15);
+  const [status,setStatus]=useState('Stopped');
+  const timer=useRef(null);
+  const collect=useCallback(async()=>{
+    const started=performance.now();
+    let latencyMs=null, reachable=false, error='';
+    try {
+      const controller=new AbortController(); const timeout=window.setTimeout(()=>controller.abort(),5000);
+      try { const r=await fetch('https://speed.cloudflare.com/__down?bytes=0&passive='+Date.now(),{cache:'no-store',mode:'cors',signal:controller.signal}); reachable=r.ok; latencyMs=Number((performance.now()-started).toFixed(1)); }
+      finally { window.clearTimeout(timeout); }
+    } catch(e) { error=e.name==='AbortError'?'Probe timed out':'Probe unavailable (offline/CORS)'; }
+    let position=null;
+    if(navigator.geolocation) { try { position=await new Promise(resolve=>navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}),()=>resolve(null),{enableHighAccuracy:true,timeout:3000,maximumAge:30000})); } catch{} }
+    const item={id:Date.now(),time:new Date().toLocaleTimeString(),latencyMs,reachable,position,error,kind:'active-http-probe'};
+    setSamples(prev=>[item,...prev].slice(0,100)); setStatus(reachable?'Collecting · internet probe':'Collecting · probe unavailable');
+  },[]);
+  useEffect(()=>{ if(running){collect();timer.current=window.setInterval(collect,Math.max(5,Number(intervalSec)||15)*1000);} return()=>{if(timer.current)window.clearInterval(timer.current)}; },[running,intervalSec,collect]);
+  const exportCsv=()=>{const rows=[['time','latency_ms','internet_reachable','latitude','longitude','accuracy_m','error'],...samples.map(x=>[x.time,x.latencyMs??'',x.reachable,x.position?.lat??'',x.position?.lng??'',x.position?.accuracy??'',x.error])];const csv=rows.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='passive-monitor-samples.csv';a.click();URL.revokeObjectURL(a.href);};
+  return <section className="page-section"><div className="section-heading"><div><div className="eyebrow">BACKGROUND OBSERVATION</div><h1>Passive Monitor</h1><p>Periodic connectivity and latency observations while this page stays open.</p></div><span className={`status-pill ${running?'online':''}`}>{status}</span></div><div className="metric-grid"><div className="metric-card"><span>Samples in session</span><strong>{samples.length}</strong></div><div className="metric-card"><span>Latest latency</span><strong>{samples[0]?.latencyMs==null?'—':`${samples[0].latencyMs} ms`}</strong></div><div className="metric-card"><span>Latest connectivity</span><strong>{samples.length?(samples[0].reachable?'Reachable':'Unavailable'):'—'}</strong></div></div><div className="panel-card"><h3>Collection controls</h3><label>Sample interval (seconds) <input type="number" min="5" max="300" value={intervalSec} onChange={e=>setIntervalSec(e.target.value)} /></label><p className="muted">This is lightweight periodic active probing, not true silent OS background collection. Browsers may pause timers when the tab is hidden. It does not collect raw Wi-Fi RSSI or cellular radio readings.</p><div className="action-row"><button className="primary-btn" onClick={()=>setRunning(v=>!v)}>{running?'Stop monitoring':'Start monitoring'}</button><button className="secondary-btn" onClick={collect}>Collect now</button><button className="secondary-btn" onClick={exportCsv} disabled={!samples.length}>Export CSV</button></div></div><div className="panel-card"><h3>Recent samples</h3>{!samples.length?<p className="muted">No samples yet. Start monitoring to begin.</p>:<div className="table-wrap"><table><thead><tr><th>Time</th><th>Latency</th><th>Internet</th><th>GPS</th><th>Note</th></tr></thead><tbody>{samples.map(x=><tr key={x.id}><td>{x.time}</td><td>{x.latencyMs==null?'—':`${x.latencyMs} ms`}</td><td>{x.reachable?'Reachable':'Unavailable'}</td><td>{x.position?`${x.position.lat.toFixed(5)}, ${x.position.lng.toFixed(5)}`:'Not available'}</td><td>{x.error||'HTTP probe'}</td></tr>)}</tbody></table></div>}</div></section>;
+}
+function CarrierComparison() {
+  const [rows,setRows]=useState([{id:1,carrier:'Carrier A',technology:'5G',rsrp:'',rsrq:'',sinr:'',download:'',latency:''},{id:2,carrier:'Carrier B',technology:'4G',rsrp:'',rsrq:'',sinr:'',download:'',latency:''}]);
+  const update=(id,key,value)=>setRows(prev=>prev.map(r=>r.id===id?{...r,[key]:value}:r));
+  const add=()=>setRows(prev=>[...prev,{id:Date.now(),carrier:`Carrier ${String.fromCharCode(65+prev.length)}`,technology:'4G',rsrp:'',rsrq:'',sinr:'',download:'',latency:''}]);
+  const score=r=>{let n=0,w=0;[['rsrp',v=>v>=-90?3:v>=-105?2:v>=-115?1:0],['sinr',v=>v>=20?3:v>=5?2:v>=0?1:0],['download',v=>v>=100?3:v>=25?2:v>0?1:0],['latency',v=>v<=30?3:v<=60?2:v<120?1:0]].forEach(([k,fn])=>{if(r[k]!==''&&Number.isFinite(Number(r[k]))){n+=fn(Number(r[k]));w++;}});return w?n/w:null;};
+  return <section className="page-section"><div className="section-heading"><div><div className="eyebrow">SIDE-BY-SIDE FIELD RESULTS</div><h1>Carrier Comparison</h1><p>Compare mobile operators at the same location using measurements from your phone or a compatible cellular diagnostic tool.</p></div><button className="secondary-btn" onClick={add}>Add carrier</button></div><div className="notice-card">Enter measured values only. Cellular RSRP/RSRQ/SINR availability depends on your device and operating system. This page does not independently read cellular radio metrics from a standard browser.</div><div className="panel-card"><div className="table-wrap"><table><thead><tr><th>Carrier</th><th>Technology</th><th>RSRP (dBm)</th><th>RSRQ (dB)</th><th>SINR (dB)</th><th>Download (Mbps)</th><th>Latency (ms)</th><th>Indicative score</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><input value={r.carrier} onChange={e=>update(r.id,'carrier',e.target.value)}/></td><td><select value={r.technology} onChange={e=>update(r.id,'technology',e.target.value)}><option>2G</option><option>3G</option><option>4G</option><option>5G</option><option>LTE</option></select></td>{['rsrp','rsrq','sinr','download','latency'].map(k=><td key={k}><input type="number" value={r[k]} onChange={e=>update(r.id,k,e.target.value)} placeholder="Measured"/></td>)}<td>{score(r)==null?'Awaiting data':`${(score(r)/3*100).toFixed(0)}/100`}</td></tr>)}</tbody></table></div><p className="muted">Score is a simple indicative comparison of entered RSRP, SINR, download and latency. Missing fields are excluded; this is not a carrier-wide ranking.</p></div></section>;
+}
+function HandheldDetector() {
+ const [mode,setMode]=useState('demo'); const [led,setLed]=useState('amber');
+ const colors={green:'#2ed6a1',amber:'#ffbd4a',red:'#ff5d73'};
+ return <section className="page-section"><div className="section-heading"><div><div className="eyebrow">OPTIONAL HARDWARE COMPANION</div><h1>Handheld Detector</h1><p>Prototype interface for a portable detector with physical LED indicators.</p></div><span className="status-pill">Hardware optional</span></div><div className="metric-grid"><div className="metric-card"><span>Signal status</span><strong style={{color:colors[led]}}>{led==='green'?'Good':led==='amber'?'Borderline':'Weak'}</strong></div><div className="metric-card"><span>Signal source</span><strong>{mode==='demo'?'Demo input':'External collector'}</strong></div></div><div className="panel-card"><h3>Indicator preview</h3><div className="led-row">{Object.entries(colors).map(([name,color])=><button key={name} className="led-option" onClick={()=>setLed(name)}><span className="led-dot" style={{background:color,boxShadow:led===name?`0 0 18px ${color}`:'none'}}></span>{name.toUpperCase()}</button>)}</div><label>Input mode <select value={mode} onChange={e=>setMode(e.target.value)}><option value="demo">Demo preview</option><option value="external">External hardware collector (integration required)</option></select></label><p className="muted">This web preview does not turn your computer into a physical detector. For a real handheld unit, use an ESP32 or similar microcontroller, a compatible Wi-Fi scanning API/module, battery/power circuitry, and three LEDs with current-limiting resistors. Cellular measurements require a separate cellular modem that exposes RSRP/RSRQ/SINR.</p><div className="notice-card">Suggested LED logic: green ≥ −60 dBm; amber −61 to −70 dBm; red below −70 dBm. Hardware wiring and device firmware must be implemented and tested separately.</div></div></section>;
+}
+
+function App() {
+  const [activePage,setActivePage]=useState('Dashboard'); const [history,setHistory]=useState([]); const [theme,setTheme]=useState(()=>localStorage.getItem('netspot-theme') || 'dark'); const [signedInAs,setSignedInAs]=useState(''); const [authChecked,setAuthChecked]=useState(false); const [loadingData,setLoadingData]=useState(false); const [apiOnline,setApiOnline]=useState(false); const [testing,setTesting]=useState(false); const [result,setResult]=useState(null); const [toast,setToast]=useState(''); const [sidebarOpen,setSidebarOpen]=useState(false); const [progress,setProgress]=useState(0); const [testStatus,setTestStatus]=useState(''); const [testError,setTestError]=useState('');
+  const locations=history.filter(r=>r.lat!==null&&r.lat!==undefined&&r.lng!==null&&r.lng!==undefined&&Number.isFinite(Number(r.lat))&&Number.isFinite(Number(r.lng))).map(r=>({id:r.id,name:r.locationName||'Measured location',area:r.surveyName||'Survey',lat:Number(r.lat),lng:Number(r.lng),latency:r.latencyMs??r.latency,loss:r.packetLossPct??r.loss,quality:r.quality||'Unknown',date:r.timestamp,timestamp:r.timestamp,walkSessionId:r.walkSessionId||null,signal:r.signalDbm,tests:1,isMeasured:r.isMeasured===true}));
   const notify=useCallback((message)=>{setToast(message);window.setTimeout(()=>setToast(''),3200)},[]);
   const normalizeRecord=(r)=>({...r,latency:r.latencyMs??r.latency??null,loss:r.packetLossPct??r.loss??null,createdAt:r.timestamp??r.createdAt});
-  const refresh=useCallback(async()=>{try{const [health,records]=await Promise.all([fetch(`${API}/api/health`,{cache:'no-store'}),fetch(`${API}/api/network-tests`,{cache:'no-store'})]);setApiOnline(health.ok);if(records.ok){const body=await records.json();const rows=(Array.isArray(body.data)?body.data:Array.isArray(body.records)?body.records:[]).map(normalizeRecord);setHistory(rows);if(rows[0])setResult(rows[0])}}catch{setApiOnline(false)}},[]);
-  useEffect(()=>{refresh();const timer=window.setInterval(refresh,30000);return()=>window.clearInterval(timer)},[refresh]);
+  const refresh=useCallback(async()=>{setLoadingData(true);try{const [health,records]=await Promise.all([apiFetch(`${API}/api/health`,{cache:'no-store'}),apiFetch(`${API}/api/network-tests`,{cache:'no-store'})]);setApiOnline(health.ok);if(records.status===401){localStorage.removeItem('netspot-auth-token');localStorage.removeItem('netspot-auth-user');setSignedInAs('');setHistory([]);setResult(null);return;}if(records.ok){const body=await records.json();const rows=(Array.isArray(body.data)?body.data:Array.isArray(body.records)?body.records:[]).map(normalizeRecord);setHistory(rows);setResult(rows[0]||null)}}catch{setApiOnline(false)}finally{setLoadingData(false)}},[]);
+  useEffect(()=>{const token=localStorage.getItem('netspot-auth-token');if(!token){setAuthChecked(true);return;}apiFetch(`${API}/api/auth/me`).then(async r=>{if(!r.ok)throw new Error('Session expired');const body=await r.json();setSignedInAs(body.user?.name||body.user?.email||'');}).catch(()=>{localStorage.removeItem('netspot-auth-token');localStorage.removeItem('netspot-auth-user');setSignedInAs('');}).finally(()=>setAuthChecked(true));},[]);
+  useEffect(()=>{if(!authChecked||!signedInAs)return;refresh();const timer=window.setInterval(refresh,30000);return()=>window.clearInterval(timer)},[refresh,authChecked,signedInAs]);
   const runTest=async(survey={})=>{
     if(testing)return;
     setTesting(true);setProgress(1);setTestError('');setTestStatus('Checking internet connectivity…');
@@ -458,7 +649,7 @@ export default function App() {
         locationName:survey.locationName||'Location not shared',location:survey.locationName||'Location not shared',surveyName:survey.surveyName||'Network survey',lat:survey.lat??null,lng:survey.lng??null,accuracyMeters:survey.accuracyMeters??null,locationSource:survey.locationSource||'none',locationPrecision:survey.locationPrecision||'approximate',indoorSurvey:survey.indoorSurvey===true,sampleCount:8,
         probeCount:8,successfulProbes:successCount,latencySamples:valid,downloadSamples,uploadSamples,
         measurementError:failureMessages.slice(0,5).join('; ')};
-      const saved=await fetch(`${API}/api/network-tests`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(measured),cache:'no-store'});
+      const saved=await apiFetch(`${API}/api/network-tests`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(measured),cache:'no-store'});
       if(!saved.ok){
         let detail='';
         try{const errBody=await saved.json();detail=errBody.message||errBody.error||'';}catch{}
@@ -471,7 +662,9 @@ export default function App() {
       const msg=error.message==='Failed to fetch'?'Cannot reach the backend. Start the backend on port 5000 and check CORS settings.':error.message||'Network test failed.';setTestError(msg);setApiOnline(false);notify(msg);
     } finally{setTesting(false);window.setTimeout(()=>setProgress(0),1800)}
   };
-  const clearHistory=async()=>{if(!window.confirm('Clear all saved network test history?'))return;try{const r=await fetch(`${API}/api/network-tests`,{method:'DELETE'});if(!r.ok)throw new Error('Could not clear history');setHistory([]);setResult(null);notify('Test history cleared')}catch(e){notify(e.message)}};
-  if(!signedInAs) return <LoginPage theme={theme} onToggleTheme={()=>setTheme(t=>{const next=t==='dark'?'light':'dark';localStorage.setItem('netspot-theme',next);return next})} onLogin={(email, name)=>{setSignedInAs(name || email);notify('Signed in to demo workspace')}} />;
-  return <div className={`ops-app ${theme==='light'?'light-mode':''}`}><aside className={`sidebar ${sidebarOpen?'sidebar-open':''}`}><div className="brand"><div className="brand-mark"><Wifi size={22}/><span/></div><div><b>NETSPOT</b><small>NETWORK INTELLIGENCE</small></div><button className="sidebar-close" onClick={()=>setSidebarOpen(false)}><X size={17}/></button></div><div className="nav-section-label">WORKSPACE</div><nav className="nav-list">{nav.map(item=>{const Icon=item.icon;return <button key={item.label} className={`nav-item ${activePage===item.label?'active':''}`} onClick={()=>{setActivePage(item.label);setSidebarOpen(false)}}><Icon size={17}/><span>{item.label}</span>{item.label==='Dead Zone Map'&&<span className="nav-count">2</span>}</button>})}</nav><div className="sidebar-spacer"/><div className="sidebar-system"><div className="sidebar-system-icon"><ShieldCheck size={16}/></div><div><b>Monitoring active</b><small>Local demo environment</small></div><i className={apiOnline?'green':'amber'}/></div><div className="sidebar-bottom"><span className="sidebar-avatar">ND</span><div><b>{signedInAs || 'Network Admin'}</b><small>NetSpot workspace</small></div><Settings size={15}/></div><div className="sidebar-utility"><button className="theme-toggle" onClick={()=>setTheme(t=>{const next=t==='dark'?'light':'dark';localStorage.setItem('netspot-theme',next);return next})}><span>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>} Appearance</span><b>{theme==='dark'?'Dark':'Light'}</b></button><button className="theme-toggle logout-toggle" onClick={()=>{setSignedInAs('');setActivePage('Dashboard')}}><span><LogOut size={15}/> Sign out</span><ExternalLink size={13}/></button></div><div className="sidebar-version">NETSPOT UI <span>v2.1.0</span></div></aside><main className="main-area"><Header page={activePage} onRefresh={refresh} apiOnline={apiOnline} signedInAs={signedInAs}/><div className="page-content">{activePage==='Dashboard'&&<Dashboard locations={locations} history={history} runTest={runTest} testing={testing} result={result} openMap={()=>setActivePage('Dead Zone Map')}/ >}{activePage==='Dead Zone Map'&&<MapScreen locations={locations}/ >}{activePage==='Network Test'&&<NetworkTest runTest={runTest} testing={testing} result={result} apiOnline={apiOnline} progress={progress} testStatus={testStatus} testError={testError}/ >}{activePage==='Test History'&&<History history={history} onClear={clearHistory}/ >}{activePage==='Reports'&&<Reports history={history} locations={locations}/ >}<footer className="app-footer"><span>© 2026 NETSPOT · NETWORK DEAD ZONE DETECTOR</span><span><i className={apiOnline?'green':'amber'}/> {apiOnline?'Backend reachable':'Backend not connected'} <b>·</b> Sample coverage data</span></footer></div></main><button className="mobile-menu" onClick={()=>setSidebarOpen(true)} aria-label="Open navigation"><Menu size={20}/></button>{toast&&<div className="toast"><CheckCircle2 size={16}/>{toast}<button onClick={()=>setToast('')}><X size={14}/></button></div>}</div>;
+  const clearHistory=async()=>{if(!window.confirm('Clear all saved network test history?'))return;try{const r=await apiFetch(`${API}/api/network-tests`,{method:'DELETE'});if(!r.ok)throw new Error('Could not clear history');setHistory([]);setResult(null);notify('Test history cleared')}catch(e){notify(e.message)}};
+  const saveWalkSample=async(sample)=>{const response=await apiFetch(`${API}/api/network-tests`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sample),cache:'no-store'});if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.message||`Could not save walk-test sample (HTTP ${response.status})`);}const body=await response.json();const record=normalizeRecord(body.data||body.record||{});setHistory(prev=>[record,...prev.filter(r=>r.id!==record.id)]);setResult(record);return record;};
+  if(!authChecked) return <div className={`login-screen ${theme==='light'?'light-mode':''}`}><div className="login-card">Checking secure session…</div></div>;
+  if(!signedInAs) return <LoginPage theme={theme} onToggleTheme={()=>setTheme(t=>{const next=t==='dark'?'light':'dark';localStorage.setItem('netspot-theme',next);return next})} onLogin={(user, token)=>{localStorage.setItem('netspot-auth-token',token);localStorage.setItem('netspot-auth-user',JSON.stringify(user));setSignedInAs(user?.name||user?.email||'');setAuthChecked(true);notify('Signed in securely');}} />;
+  return <div className={`ops-app ${theme==='light'?'light-mode':''}`}><aside className={`sidebar ${sidebarOpen?'sidebar-open':''}`}><div className="brand"><div className="brand-mark"><Wifi size={22}/><span/></div><div><b>NETSPOT</b><small>NETWORK INTELLIGENCE</small></div><button className="sidebar-close" onClick={()=>setSidebarOpen(false)}><X size={17}/></button></div><div className="nav-section-label">WORKSPACE</div><nav className="nav-list">{nav.map(item=>{const Icon=item.icon;return <button key={item.label} className={`nav-item ${activePage===item.label?'active':''}`} onClick={()=>{setActivePage(item.label);setSidebarOpen(false)}}><Icon size={17}/><span>{item.label}</span>{item.label==='Dead Zone Map'&&<span className="nav-count">2</span>}</button>})}</nav><div className="sidebar-spacer"/><div className="sidebar-system"><div className="sidebar-system-icon"><ShieldCheck size={16}/></div><div><b>Monitoring active</b><small>Local demo environment</small></div><i className={apiOnline?'green':'amber'}/></div><div className="sidebar-bottom"><span className="sidebar-avatar">ND</span><div><b>{signedInAs || 'Network Admin'}</b><small>NetSpot workspace</small></div><Settings size={15}/></div><div className="sidebar-utility"><button className="theme-toggle" onClick={()=>setTheme(t=>{const next=t==='dark'?'light':'dark';localStorage.setItem('netspot-theme',next);return next})}><span>{theme==='dark'?<Sun size={15}/>:<Moon size={15}/>} Appearance</span><b>{theme==='dark'?'Dark':'Light'}</b></button><button className="theme-toggle logout-toggle" onClick={()=>{apiFetch(`${API}/api/auth/logout`,{method:'POST'}).catch(()=>{});localStorage.removeItem('netspot-auth-token');localStorage.removeItem('netspot-auth-user');setSignedInAs('');setActivePage('Dashboard');setHistory([]);setResult(null)}}><span><LogOut size={15}/> Sign out</span><ExternalLink size={13}/></button></div><div className="sidebar-version">NETSPOT UI <span>v2.1.0</span></div></aside><main className="main-area"><Header page={activePage} onRefresh={refresh} apiOnline={apiOnline} signedInAs={signedInAs}/><div className="page-content">{activePage==='Dashboard'&&<Dashboard locations={locations} history={history} runTest={runTest} testing={testing} result={result} loadingData={loadingData} openMap={()=>setActivePage('Dead Zone Map')}/ >}{activePage==='Dead Zone Map'&&<MapScreen history={history} onRefresh={refresh}/ >}{activePage==='Network Test'&&<NetworkTest runTest={runTest} testing={testing} result={result} apiOnline={apiOnline} progress={progress} testStatus={testStatus} testError={testError}/ >}{activePage==='Walk-test Survey'&&<WalkTest onSave={saveWalkSample} onNotice={notify}/ >}{activePage==='Test History'&&<History history={history} onClear={clearHistory} onDelete={async(id)=>{const r=await apiFetch(`${API}/api/network-tests/${encodeURIComponent(id)}`,{method:'DELETE'});if(!r.ok)throw new Error('Could not delete this test');setHistory(prev=>prev.filter(x=>x.id!==id));notify('Test deleted');}}/ >}{activePage==='Reports'&&<Reports history={history} locations={locations}/ >}{activePage==='Passive Monitor'&&<PassiveMonitor/>}{activePage==='Carrier Comparison'&&<CarrierComparison/>}{activePage==='Handheld Detector'&&<HandheldDetector/>}<footer className="app-footer"><span>© 2026 NETSPOT · NETWORK DEAD ZONE DETECTOR</span><span><i className={apiOnline?'green':'amber'}/> {apiOnline?'Backend reachable':'Backend not connected'} <b>·</b> User-scoped saved measurements</span></footer></div></main><button className="mobile-menu" onClick={()=>setSidebarOpen(true)} aria-label="Open navigation"><Menu size={20}/></button>{toast&&<div className="toast"><CheckCircle2 size={16}/>{toast}<button onClick={()=>setToast('')}><X size={14}/></button></div>}</div>;
 }

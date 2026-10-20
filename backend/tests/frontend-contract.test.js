@@ -1,0 +1,20 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const appSource = path.join(__dirname,'../../frontend/src/App.jsx');
+test('dashboard renders empty/loading states and uses saved measurements only', async () => {
+  const source = await fs.readFile(appSource,'utf8');
+  assert.match(source,/Loading saved measurements/);
+  assert.match(source,/No geolocated measurements yet/);
+  assert.match(source,/No latency measurements yet/);
+  assert.match(source,/history\.filter\(r => r && r\.isMeasured === true\)/);
+  assert.match(source,/locations\.filter\(l=>Number\.isFinite\(Number\(l\.lat\)\)/);
+  assert.doesNotMatch(source,/DEMO MAP|Sample locations displayed|Parking Area · Demo data/);
+  assert.match(source,/function WalkTest\(/);
+  assert.match(source,/navigator\.geolocation\.watchPosition/);
+  assert.match(source,/http:\/\/127\.0\.0\.1:8765\/signal/);
+  assert.match(source,/function WorldTopology\(/);
+  assert.match(source,/WORLD NETWORK TOPOLOGY/);
+});

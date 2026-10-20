@@ -1,0 +1,93 @@
+[
+  {
+    "id": "1",
+    "name": "Main Library",
+    "area": "North Campus",
+    "lat": 18.4575,
+    "lng": 73.8203,
+    "latency": 24,
+    "loss": 0,
+    "signal": -48,
+    "quality": "Good",
+    "date": "2026-10-18",
+    "tests": 18
+  },
+  {
+    "id": "2",
+    "name": "Computer Lab 3",
+    "area": "Academic Block",
+    "lat": 18.4585,
+    "lng": 73.8218,
+    "latency": 86,
+    "loss": 1.8,
+    "signal": -67,
+    "quality": "Moderate",
+    "date": "2026-10-17",
+    "tests": 12
+  },
+  {
+    "id": "3",
+    "name": "Parking Area",
+    "area": "East Campus",
+    "lat": 18.4578,
+    "lng": 73.824,
+    "latency": 192,
+    "loss": 8.4,
+    "signal": -83,
+    "quality": "Poor",
+    "date": "2026-10-18",
+    "tests": 9
+  },
+  {
+    "id": "4",
+    "name": "College Canteen",
+    "area": "Central Campus",
+    "lat": 18.4565,
+    "lng": 73.822,
+    "latency": 38,
+    "loss": 0.4,
+    "signal": -54,
+    "quality": "Good",
+    "date": "2026-10-16",
+    "tests": 15
+  },
+  {
+    "id": "5",
+    "name": "Sports Ground",
+    "area": "South Campus",
+    "lat": 18.4549,
+    "lng": 73.8215,
+    "latency": 128,
+    "loss": 4.1,
+    "signal": -74,
+    "quality": "Moderate",
+    "date": "2026-10-15",
+    "tests": 7
+  },
+  {
+    "id": "6",
+    "name": "Hostel Entrance",
+    "area": "West Campus",
+    "lat": 18.4568,
+    "lng": 73.8189,
+    "latency": 31,
+    "loss": 0,
+    "signal": -51,
+    "quality": "Good",
+    "date": "2026-10-18",
+    "tests": 14
+  },
+  {
+    "id": "7",
+    "name": "Auditorium",
+    "area": "Academic Block",
+    "lat": 18.4594,
+    "lng": 73.8231,
+    "latency": 164,
+    "loss": 6.2,
+    "signal": -80,
+    "quality": "Poor",
+    "date": "2026-10-14",
+    "tests": 6
+  }
+]

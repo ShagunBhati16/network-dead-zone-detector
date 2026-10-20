@@ -2,8 +2,8 @@
 
 const DEFAULT_THRESHOLDS = Object.freeze({
   goodSignalMinDbm: -60,
-  moderateSignalMinDbm: -75,
-  poorSignalMinDbm: -85,
+  moderateSignalMinDbm: -70,
+  poorSignalMinDbm: -80,
   goodLatencyMaxMs: 60,
   moderateLatencyMaxMs: 150,
   poorLatencyMaxMs: 300,
