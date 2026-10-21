@@ -111,41 +111,6 @@ function CoverageChart() {
   const data = [{name:'SNR (dBm)',Excellent:26,Good:28,Fair:4,Poor:1}];
   return <div className="coverage-chart"><div className="coverage-chart-title">Signal Strength Distribution</div><div className="coverage-chart-body"><ResponsiveContainer width="100%" height="100%"><BarChart data={data} margin={{top:18,right:4,left:-15,bottom:8}}><CartesianGrid stroke="#e5e9ec" vertical={false}/><XAxis dataKey="name" tick={{fontSize:10,fill:'#617783'}} axisLine={{stroke:'#d9e1e5'}} tickLine={false}/><YAxis domain={[0,30]} ticks={[0,5,10,15,20,25,30]} tick={{fontSize:10,fill:'#53666f'}} axisLine={false} tickLine={false}/><Tooltip/><Bar dataKey="Excellent" fill="#51b66d"/><Bar dataKey="Good" fill="#e6d83b"/><Bar dataKey="Fair" fill="#f4ad27"/><Bar dataKey="Poor" fill="#e94343"/></BarChart></ResponsiveContainer><div className="coverage-legend"><span><i style={{background:'#51b66d'}}/>Excellent</span><span><i style={{background:'#e6d83b'}}/>Good</span><span><i style={{background:'#f4ad27'}}/>Fair</span><span><i style={{background:'#e94343'}}/>Poor</span></div></div></div>;
 }
-
-function ThresholdRecommendationPanel({ marks }) {
-  const [networkType, setNetworkType] = useState('Wi-Fi');
-  const [wifiThreshold, setWifiThreshold] = useState(-70);
-  const [cellularThreshold, setCellularThreshold] = useState(-110);
-  const [fix, setFix] = useState('mesh');
-  const [budget, setBudget] = useState('medium');
-  const [placement, setPlacement] = useState('central');
-  const measured = marks.filter(m => Number.isFinite(Number(m.signalDbm)) && m.signalDbm !== null);
-  const threshold = networkType === 'Wi-Fi' ? Number(wifiThreshold) : Number(cellularThreshold);
-  const weak = measured.filter(m => Number(m.signalDbm) < threshold);
-  const options = {
-    router: { title:'Upgrade or reposition the router', cost:'Low–medium', gain:8, detail:'Move the existing router to an open, central, elevated position; avoid cabinets and large obstructions.' },
-    mesh: { title:'Add a mesh node', cost:'Medium–high', gain:14, detail:'Place a mesh node between the router and weak rooms, where it still receives a reliable backhaul signal.' },
-    repeater: { title:'Add a Wi-Fi repeater/extender', cost:'Low–medium', gain:9, detail:'Place the extender about halfway to the weak area, not inside the dead zone. Throughput may decrease on single-radio repeaters.' },
-    ap: { title:'Add a wired access point', cost:'Medium–high', gain:18, detail:'Use Ethernet backhaul and place an access point closer to the weak rooms for the most predictable improvement.' }
-  };
-  const selected = options[fix];
-  const estimated = Math.min(25, selected.gain + (placement === 'central' ? 3 : placement === 'weak-edge' ? 0 : -2) + (budget === 'high' ? 2 : budget === 'low' ? -2 : 0));
-  return <section className="panel threshold-panel"><div className="panel-title"><div><ShieldCheck size={15}/> Signal thresholds & fix recommendations</div><span className="map-count">Rule-based estimate</span></div>
-    <p className="floorplan-help">Classifies measured points against explicit thresholds and compares a proposed fix. Predicted gains are planning estimates, not guarantees or live RF simulations.</p>
-    <div className="threshold-controls">
-      <label>Network type<select value={networkType} onChange={e=>setNetworkType(e.target.value)}><option>Wi-Fi</option><option>Cellular</option></select></label>
-      {networkType==='Wi-Fi' ? <label>Weak-signal threshold (dBm)<input type="number" min="-100" max="-30" value={wifiThreshold} onChange={e=>setWifiThreshold(e.target.value)}/></label> : <label>Cellular RSRP threshold (dBm)<input type="number" min="-140" max="-70" value={cellularThreshold} onChange={e=>setCellularThreshold(e.target.value)}/></label>}
-      <label>Proposed fix<select value={fix} onChange={e=>setFix(e.target.value)}><option value="router">Router reposition/upgrade</option><option value="mesh">Mesh node</option><option value="repeater">Wi-Fi repeater/extender</option><option value="ap">Wired access point</option></select></label>
-      <label>Budget range<select value={budget} onChange={e=>setBudget(e.target.value)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
-      <label>Placement plan<select value={placement} onChange={e=>setPlacement(e.target.value)}><option value="central">Central/open location</option><option value="weak-edge">Near edge of weak area</option><option value="far">Far end of weak area</option></select></label>
-    </div>
-    <div className="threshold-summary"><div><small>Measured points</small><b>{measured.length}</b></div><div><small>Below threshold</small><b className={weak.length?'threshold-bad':''}>{networkType==='Wi-Fi'?weak.length:'—'}</b></div><div><small>Classification</small><b>{networkType==='Wi-Fi'?(weak.length?'Weak/dead-zone candidates':'No points below threshold'):'Threshold configured'}</b></div></div>
-    {networkType==='Cellular'&&<p className="threshold-note">Cellular threshold applies to RSRP (not Wi-Fi RSSI). This floor-plan form currently stores Wi-Fi RSSI only, so cellular points are not classified until actual cellular RSRP measurements are added.</p>}
-    <div className="recommendation-result"><div className="recommendation-heading"><Router size={17}/><b>{selected.title}</b><span>{selected.cost} cost</span></div><p>{selected.detail}</p><div className="recommendation-impact"><span>Illustrative predicted improvement</span><strong>~{estimated} dB</strong></div><small>Heuristic estimate only. Actual change depends on building materials, channel congestion, device capabilities, backhaul and placement. Verify by repeating measurements at the same points after installation.</small></div>
-    {networkType==='Wi-Fi'&&weak.length>0&&<div className="threshold-weak-list"><b>Points to prioritize</b>{weak.map(m=><div key={m.id}><span>{m.label}</span><strong>{m.signalDbm} dBm</strong><small>{Number(m.signalDbm)<=-80?'Very weak':Number(m.signalDbm)<-70?'Weak':'Below configured threshold'}</small></div>)}</div>}
-  </section>;
-}
-
 function FloorPlanSurvey({ onSaved }) {
   const [floorPlan, setFloorPlan] = useState(() => { try { return JSON.parse(localStorage.getItem('netspot-floorplan-image') || 'null'); } catch { return null; } });
   const [marks, setMarks] = useState(() => { try { return JSON.parse(localStorage.getItem('netspot-floorplan-marks') || '[]'); } catch { return []; } });
@@ -176,7 +141,6 @@ function FloorPlanSurvey({ onSaved }) {
       {marks.length>0&&<div className="floorplan-mark-list">{marks.map((m,i)=><div key={m.id}><span className="floorplan-list-dot" style={{background:m.signalDbm===null?'#5da8ff':m.signalDbm>=-60?'#2ed6a1':m.signalDbm>=-70?'#ffbd4a':'#ff5364'}}/><span><b>{i+1}. {m.label}</b><small>{m.signalDbm===null?'Annotation only':`${m.signalDbm} dBm · ${m.quality}`} · {new Date(m.createdAt).toLocaleString()}</small></span><button className="text-button history-delete" onClick={()=>setMarks(prev=>prev.filter(x=>x.id!==m.id))} aria-label={`Delete ${m.label}`}><X size={14}/></button></div>)}</div>}
     </> : <div className="floorplan-empty"><ImageUp size={24}/><b>No floor plan uploaded</b><span>Choose a floor-plan image to start placing indoor survey points.</span></div>}
     {error&&<p className="floorplan-error" role="alert">{error}</p>}
-    <ThresholdRecommendationPanel marks={marks}/>
   </section>;
 }
 
