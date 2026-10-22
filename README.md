@@ -381,3 +381,10 @@ See `docs/TESTING-AND-DEPLOYMENT.md` for the manual verification
 checklist, deployment guidance, data backup notes, and collector
 details. See `docs/FLOORPLAN-HEATMAP.md` for more information about
 floor-plan annotations and heatmap behavior.
+
+
+## YOUTUBE LINK OF PROJECT DEMONSTRATION
+
+Watch our Network Dead Zone Detector project demonstration here:
+
+https://youtu.be/N7W79wWFKvE
